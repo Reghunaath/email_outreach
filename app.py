@@ -8,10 +8,11 @@ from datetime import datetime, timedelta
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
-TEMPLATE_FILE = "template.html"
-RESUME_FILE   = "Reghunaath_Resume_Feb_N.pdf"
-DATA_FILE     = "data.json"
-LOG_FILE      = "log.csv"
+TEMPLATE_FILE           = "template.html"
+TEMPLATE_RECRUITER_FILE = "template_recruiter.html"
+RESUME_FILE             = "Reghunaath_Resume_Feb_N.pdf"
+DATA_FILE               = "data.json"
+LOG_FILE                = "log.csv"
 
 LOG_HEADERS = ["name", "email", "company", "url_extension", "sent_at", "scheduled_for"]
 
@@ -27,7 +28,7 @@ def log_email(name: str, email: str, company: str, url_extension: int, scheduled
             "name":          name,
             "email":         email,
             "company":       company,
-            "url_extension":         url_extension,
+            "url_extension": url_extension,
             "sent_at":       datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "scheduled_for": scheduled_for,
         })
@@ -43,16 +44,22 @@ def increment_url_extension() -> None:
     Path(DATA_FILE).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def load_template(name: str, company: str) -> str:
+def load_template(name: str, company: str, mode: str = "Founder", job_ids: str = "") -> str:
     url_extension = read_data()["url_extension"]
-    return Path(TEMPLATE_FILE).read_text(encoding="utf-8").format(name=name, company=company, url_extension=url_extension)
+    if mode == "Recruiter":
+        return Path(TEMPLATE_RECRUITER_FILE).read_text(encoding="utf-8").format(
+            name=name, company=company, job_ids=job_ids, url_extension=url_extension
+        )
+    return Path(TEMPLATE_FILE).read_text(encoding="utf-8").format(
+        name=name, company=company, url_extension=url_extension
+    )
 
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Email Outreach")
-        self.geometry("420x500")
+        self.geometry("420x580")
         self.resizable(False, False)
         self._build_ui()
 
@@ -61,10 +68,21 @@ class App(ctk.CTk):
             self, text="Email Outreach", font=ctk.CTkFont(size=20, weight="bold")
         ).pack(padx=24, pady=(24, 20), anchor="w")
 
+        # ── Mode ──
+        ctk.CTkLabel(
+            self, text="MODE", font=ctk.CTkFont(size=11), text_color="gray"
+        ).pack(padx=24, pady=(0, 8), anchor="w")
+
+        self.mode_toggle = ctk.CTkSegmentedButton(
+            self, values=["Founder", "Recruiter"], command=self._toggle_mode, width=372
+        )
+        self.mode_toggle.set("Founder")
+        self.mode_toggle.pack(padx=24, pady=(0, 10))
+
         # ── Recipient ──
         ctk.CTkLabel(
             self, text="RECIPIENT", font=ctk.CTkFont(size=11), text_color="gray"
-        ).pack(padx=24, pady=(0, 8), anchor="w")
+        ).pack(padx=24, pady=(8, 8), anchor="w")
 
         self.name_entry    = ctk.CTkEntry(self, placeholder_text="Name",    width=372, height=38)
         self.email_entry   = ctk.CTkEntry(self, placeholder_text="Email",   width=372, height=38)
@@ -72,10 +90,16 @@ class App(ctk.CTk):
         for entry in (self.name_entry, self.email_entry, self.company_entry):
             entry.pack(padx=24, pady=(0, 10))
 
+        # Job IDs entry — hidden until Recruiter mode is selected
+        self.job_ids_entry = ctk.CTkEntry(
+            self, placeholder_text="Job IDs (e.g. 12345, 67890)", width=372, height=38
+        )
+
         # ── When ──
-        ctk.CTkLabel(
+        self.when_label = ctk.CTkLabel(
             self, text="WHEN", font=ctk.CTkFont(size=11), text_color="gray"
-        ).pack(padx=24, pady=(8, 8), anchor="w")
+        )
+        self.when_label.pack(padx=24, pady=(8, 8), anchor="w")
 
         self.send_mode = ctk.CTkSegmentedButton(
             self, values=["Send Now", "Schedule"], command=self._toggle_schedule, width=372
@@ -104,14 +128,28 @@ class App(ctk.CTk):
         self.status = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=12))
         self.status.pack(padx=24)
 
+    def _toggle_mode(self, value: str):
+        if value == "Recruiter":
+            self.job_ids_entry.pack(padx=24, pady=(0, 10), before=self.when_label)
+        else:
+            self.job_ids_entry.pack_forget()
+        self._update_geometry()
+
     def _toggle_schedule(self, value: str):
         if value == "Schedule":
             self.schedule_frame.pack(padx=24, pady=(0, 10), before=self.send_btn)
-            self.geometry("420x560")
             self._set_schedule_defaults()
         else:
             self.schedule_frame.pack_forget()
-            self.geometry("420x500")
+        self._update_geometry()
+
+    def _update_geometry(self):
+        h = 580
+        if self.mode_toggle.get() == "Recruiter":
+            h += 48
+        if self.send_mode.get() == "Schedule":
+            h += 60
+        self.geometry(f"420x{h}")
 
     def _set_schedule_defaults(self):
         now = datetime.now()
@@ -127,48 +165,76 @@ class App(ctk.CTk):
         self.status.configure(text=msg, text_color=("green" if ok else "red"))
 
     def _send(self):
-        name    = self.name_entry.get().strip()
-        email   = self.email_entry.get().strip()
+        names   = [n.strip() for n in self.name_entry.get().split(",") if n.strip()]
+        emails  = [e.strip() for e in self.email_entry.get().split(",") if e.strip()]
         company = self.company_entry.get().strip()
+        mode    = self.mode_toggle.get()
+        job_ids = self.job_ids_entry.get().strip() if mode == "Recruiter" else ""
 
-        if not all([name, email, company]):
+        if not names or not emails or not company:
             self._set_status("Fill in all fields.", ok=False)
             return
 
-        try:
-            url_extension   = read_data()["url_extension"]
-            outlook = win32com.client.Dispatch("Outlook.Application")
-            mail    = outlook.CreateItem(0)
-            mail.To       = email
-            mail.Subject  = f"How I Can Contribute to {company}"
-            mail.HTMLBody = load_template(name, company)
-            mail.Attachments.Add(str(Path(RESUME_FILE).resolve()))
+        if mode == "Recruiter" and not job_ids:
+            self._set_status("Enter at least one Job ID.", ok=False)
+            return
 
-            if self.send_mode.get() == "Schedule":
-                date_str = self.date_entry.get().strip()
-                time_str = self.time_entry.get().strip()
-                if not date_str or not time_str:
-                    self._set_status("Enter date and time.", ok=False)
-                    return
-                try:
-                    dt = datetime.strptime(f"{date_str} {time_str}", "%m/%d/%Y %I:%M %p")
-                except ValueError:
-                    self._set_status("Use MM/DD/YYYY and HH:MM AM/PM.", ok=False)
-                    return
-                mail.DeferredDeliveryTime = dt.strftime("%m/%d/%Y %I:%M %p")
-                mail.Send()
+        if len(names) != len(emails):
+            self._set_status(f"Name/email count mismatch ({len(names)} vs {len(emails)}).", ok=False)
+            return
+
+        schedule_mode = self.send_mode.get() == "Schedule"
+        dt = None
+        if schedule_mode:
+            date_str = self.date_entry.get().strip()
+            time_str = self.time_entry.get().strip()
+            if not date_str or not time_str:
+                self._set_status("Enter date and time.", ok=False)
+                return
+            try:
+                dt = datetime.strptime(f"{date_str} {time_str}", "%m/%d/%Y %I:%M %p")
+            except ValueError:
+                self._set_status("Use MM/DD/YYYY and HH:MM AM/PM.", ok=False)
+                return
+
+        try:
+            outlook = win32com.client.Dispatch("Outlook.Application")
+            resume_path = str(Path(RESUME_FILE).resolve())
+            subject = (
+                f"Reaching out so I'm more than just a PDF"
+                if mode == "Recruiter"
+                else f"How I Can Contribute to {company}"
+            )
+
+            for name, email in zip(names, emails):
+                url_extension = read_data()["url_extension"]
+                mail = outlook.CreateItem(0)
+                mail.To       = email
+                mail.Subject  = subject
+                mail.HTMLBody = load_template(name, company, mode=mode, job_ids=job_ids)
+                mail.Attachments.Add(resume_path)
+
+                if schedule_mode:
+                    mail.DeferredDeliveryTime = dt.strftime("%m/%d/%Y %I:%M %p")
+                    mail.Send()
+                    log_email(name, email, company, url_extension, scheduled_for=dt.strftime("%Y-%m-%d %H:%M:%S"))
+                else:
+                    mail.Send()
+                    log_email(name, email, company, url_extension)
                 increment_url_extension()
-                log_email(name, email, company, url_extension, scheduled_for=dt.strftime("%Y-%m-%d %H:%M:%S"))
-                self._set_status(f"Scheduled for {dt.strftime('%b %d at %I:%M %p')}.")
-            else:
-                mail.Send()
-                increment_url_extension()
-                log_email(name, email, company, url_extension)
-                self._set_status(f"Sent to {name} at {company}.")
 
             self.name_entry.delete(0, "end")
             self.email_entry.delete(0, "end")
             self.company_entry.delete(0, "end")
+            if mode == "Recruiter":
+                self.job_ids_entry.delete(0, "end")
+
+            count = len(names)
+            if schedule_mode:
+                self._set_status(f"Scheduled {count} email(s) for {dt.strftime('%b %d at %I:%M %p')}.")
+            else:
+                label = names[0] if count == 1 else f"{count} recipients"
+                self._set_status(f"Sent to {label} at {company}.")
 
         except Exception as e:
             self._set_status(f"Error: {e}", ok=False)
