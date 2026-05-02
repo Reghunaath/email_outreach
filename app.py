@@ -14,6 +14,9 @@ RESUME_FILE             = "Reghunaath_Resume_Feb_N.pdf"
 DATA_FILE               = "data.json"
 LOG_FILE                = "log.csv"
 
+DEFAULT_SUBJECT_FOUNDER   = "How I Can Contribute to {company}"
+DEFAULT_SUBJECT_RECRUITER = "Reaching out so I'm more than just a PDF"
+
 LOG_HEADERS = ["name", "email", "company", "url_extension", "sent_at", "scheduled_for"]
 
 
@@ -44,23 +47,44 @@ def increment_url_extension() -> None:
     Path(DATA_FILE).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def load_template(name: str, company: str, mode: str = "Founder", job_ids: str = "") -> str:
-    url_extension = read_data()["url_extension"]
-    if mode == "Recruiter":
-        return Path(TEMPLATE_RECRUITER_FILE).read_text(encoding="utf-8").format(
-            name=name, company=company, job_ids=job_ids, url_extension=url_extension
-        )
-    return Path(TEMPLATE_FILE).read_text(encoding="utf-8").format(
-        name=name, company=company, url_extension=url_extension
-    )
+def read_template_raw(mode: str = "Founder") -> str:
+    file = TEMPLATE_RECRUITER_FILE if mode == "Recruiter" else TEMPLATE_FILE
+    return Path(file).read_text(encoding="utf-8").strip()
+
+
+class BodyEditModal(ctk.CTkToplevel):
+    def __init__(self, parent, initial_text: str):
+        super().__init__(parent)
+        self.title("Edit Email Body")
+        self.geometry("560x500")
+        self.resizable(False, False)
+        self.grab_set()
+
+        self._saved_text = initial_text
+
+        self.textbox = ctk.CTkTextbox(self, width=512, height=400, wrap="word")
+        self.textbox.insert("1.0", initial_text)
+        self.textbox.pack(padx=24, pady=(20, 12))
+
+        ctk.CTkButton(
+            self, text="Save", width=512, height=38, command=self._save
+        ).pack(padx=24, pady=(0, 20))
+
+    def _save(self):
+        self._saved_text = self.textbox.get("1.0", "end").strip()
+        self.destroy()
+
+    def get_text(self) -> str:
+        return self._saved_text
 
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Email Outreach")
-        self.geometry("420x580")
+        self.geometry("420x672")
         self.resizable(False, False)
+        self._body_text = read_template_raw("Founder")
         self._build_ui()
 
     def _build_ui(self):
@@ -95,6 +119,19 @@ class App(ctk.CTk):
             self, placeholder_text="Job IDs (e.g. 12345, 67890)", width=372, height=38
         )
 
+        # Subject — always visible, pre-filled with mode default
+        self.subject_entry = ctk.CTkEntry(self, placeholder_text="Subject", width=372, height=38)
+        self.subject_entry.insert(0, DEFAULT_SUBJECT_FOUNDER)
+        self.subject_entry.pack(padx=24, pady=(0, 10))
+
+        # ── Edit Body button ──
+        self.edit_body_btn = ctk.CTkButton(
+            self, text="Edit Body", width=372, height=38,
+            fg_color="transparent", border_width=1,
+            command=self._open_body_modal,
+        )
+        self.edit_body_btn.pack(padx=24, pady=(0, 10))
+
         # ── When ──
         self.when_label = ctk.CTkLabel(
             self, text="WHEN", font=ctk.CTkFont(size=11), text_color="gray"
@@ -128,11 +165,21 @@ class App(ctk.CTk):
         self.status = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=12))
         self.status.pack(padx=24)
 
+    def _open_body_modal(self):
+        modal = BodyEditModal(self, self._body_text)
+        self.wait_window(modal)
+        self._body_text = modal.get_text()
+
     def _toggle_mode(self, value: str):
         if value == "Recruiter":
-            self.job_ids_entry.pack(padx=24, pady=(0, 10), before=self.when_label)
+            self.job_ids_entry.pack(padx=24, pady=(0, 10), before=self.subject_entry)
+            self.subject_entry.delete(0, "end")
+            self.subject_entry.insert(0, DEFAULT_SUBJECT_RECRUITER)
         else:
             self.job_ids_entry.pack_forget()
+            self.subject_entry.delete(0, "end")
+            self.subject_entry.insert(0, DEFAULT_SUBJECT_FOUNDER)
+        self._body_text = read_template_raw(value)
         self._update_geometry()
 
     def _toggle_schedule(self, value: str):
@@ -144,7 +191,7 @@ class App(ctk.CTk):
         self._update_geometry()
 
     def _update_geometry(self):
-        h = 580
+        h = 672
         if self.mode_toggle.get() == "Recruiter":
             h += 48
         if self.send_mode.get() == "Schedule":
@@ -175,8 +222,14 @@ class App(ctk.CTk):
             self._set_status("Fill in all fields.", ok=False)
             return
 
+        subject = self.subject_entry.get().strip().replace("{company}", company)
+
         if mode == "Recruiter" and not job_ids:
             self._set_status("Enter at least one Job ID.", ok=False)
+            return
+
+        if not subject:
+            self._set_status("Subject cannot be empty.", ok=False)
             return
 
         if len(names) != len(emails):
@@ -200,18 +253,20 @@ class App(ctk.CTk):
         try:
             outlook = win32com.client.Dispatch("Outlook.Application")
             resume_path = str(Path(RESUME_FILE).resolve())
-            subject = (
-                f"Reaching out so I'm more than just a PDF"
-                if mode == "Recruiter"
-                else f"How I Can Contribute to {company}"
-            )
+
+            body_template = self._body_text
 
             for name, email in zip(names, emails):
                 url_extension = read_data()["url_extension"]
+                body = (body_template
+                    .replace("{name}", name)
+                    .replace("{company}", company)
+                    .replace("{url_extension}", str(url_extension))
+                    .replace("{job_ids}", job_ids))
                 mail = outlook.CreateItem(0)
                 mail.To       = email
                 mail.Subject  = subject
-                mail.HTMLBody = load_template(name, company, mode=mode, job_ids=job_ids)
+                mail.HTMLBody = body
                 mail.Attachments.Add(resume_path)
 
                 if schedule_mode:
@@ -228,6 +283,9 @@ class App(ctk.CTk):
             self.company_entry.delete(0, "end")
             if mode == "Recruiter":
                 self.job_ids_entry.delete(0, "end")
+            self.subject_entry.delete(0, "end")
+            self.subject_entry.insert(0, DEFAULT_SUBJECT_FOUNDER if mode == "Founder" else DEFAULT_SUBJECT_RECRUITER)
+            self._body_text = read_template_raw(mode)
 
             count = len(names)
             if schedule_mode:
