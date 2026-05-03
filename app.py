@@ -10,7 +10,7 @@ ctk.set_default_color_theme("blue")
 
 TEMPLATE_FILE           = "template.html"
 TEMPLATE_RECRUITER_FILE = "template_recruiter.html"
-RESUME_FILE             = "Reghunaath_Resume_Feb_N.pdf"
+RESUME_FILE             = "Reghunaath_Resume_May_N.pdf"
 DATA_FILE               = "data.json"
 LOG_FILE                = "log.csv"
 
@@ -85,6 +85,7 @@ class App(ctk.CTk):
         self.geometry("420x672")
         self.resizable(False, False)
         self._body_text = read_template_raw("Founder")
+        self._recruiter_input_mode = "Job IDs"
         self._build_ui()
 
     def _build_ui(self):
@@ -114,9 +115,24 @@ class App(ctk.CTk):
         for entry in (self.name_entry, self.email_entry, self.company_entry):
             entry.pack(padx=24, pady=(0, 10))
 
-        # Job IDs entry — hidden until Recruiter mode is selected
+        # Recruiter sub-toggle — hidden until Recruiter mode is selected
+        self.recruiter_sub_toggle = ctk.CTkSegmentedButton(
+            self, values=["Job IDs", "Position"],
+            command=self._toggle_recruiter_input, width=372
+        )
+        self.recruiter_sub_toggle.set("Job IDs")
+
+        # Job IDs entry — hidden until Recruiter + Job IDs sub-mode
         self.job_ids_entry = ctk.CTkEntry(
             self, placeholder_text="Job IDs (e.g. 12345, 67890)", width=372, height=38
+        )
+
+        # Position fields — hidden until Recruiter + Position sub-mode
+        self.position_name_entry = ctk.CTkEntry(
+            self, placeholder_text="Position Name(s), comma-separated", width=372, height=38
+        )
+        self.position_link_entry = ctk.CTkEntry(
+            self, placeholder_text="Job URL(s), comma-separated (optional)", width=372, height=38
         )
 
         # Subject — always visible, pre-filled with mode default
@@ -170,13 +186,32 @@ class App(ctk.CTk):
         self.wait_window(modal)
         self._body_text = modal.get_text()
 
+    def _toggle_recruiter_input(self, value: str):
+        self._recruiter_input_mode = value
+        if value == "Job IDs":
+            self.position_name_entry.pack_forget()
+            self.position_link_entry.pack_forget()
+            self.job_ids_entry.pack(padx=24, pady=(0, 10), before=self.subject_entry)
+        else:
+            self.job_ids_entry.pack_forget()
+            self.position_name_entry.pack(padx=24, pady=(0, 10), before=self.subject_entry)
+            self.position_link_entry.pack(padx=24, pady=(0, 10), before=self.subject_entry)
+        self._update_geometry()
+
     def _toggle_mode(self, value: str):
         if value == "Recruiter":
+            self.recruiter_sub_toggle.pack(padx=24, pady=(0, 10), before=self.subject_entry)
             self.job_ids_entry.pack(padx=24, pady=(0, 10), before=self.subject_entry)
+            self._recruiter_input_mode = "Job IDs"
+            self.recruiter_sub_toggle.set("Job IDs")
             self.subject_entry.delete(0, "end")
             self.subject_entry.insert(0, DEFAULT_SUBJECT_RECRUITER)
         else:
+            self.recruiter_sub_toggle.pack_forget()
             self.job_ids_entry.pack_forget()
+            self.position_name_entry.pack_forget()
+            self.position_link_entry.pack_forget()
+            self._recruiter_input_mode = "Job IDs"
             self.subject_entry.delete(0, "end")
             self.subject_entry.insert(0, DEFAULT_SUBJECT_FOUNDER)
         self._body_text = read_template_raw(value)
@@ -193,7 +228,11 @@ class App(ctk.CTk):
     def _update_geometry(self):
         h = 672
         if self.mode_toggle.get() == "Recruiter":
-            h += 48
+            h += 48  # sub-toggle
+            if self._recruiter_input_mode == "Job IDs":
+                h += 48  # job_ids_entry
+            else:
+                h += 96  # position_name + position_link
         if self.send_mode.get() == "Schedule":
             h += 60
         self.geometry(f"420x{h}")
@@ -216,7 +255,9 @@ class App(ctk.CTk):
         emails  = [e.strip() for e in self.email_entry.get().split(",") if e.strip()]
         company = self.company_entry.get().strip()
         mode    = self.mode_toggle.get()
-        job_ids = self.job_ids_entry.get().strip() if mode == "Recruiter" else ""
+        job_ids       = self.job_ids_entry.get().strip() if (mode == "Recruiter" and self._recruiter_input_mode == "Job IDs") else ""
+        position_name = self.position_name_entry.get().strip() if (mode == "Recruiter" and self._recruiter_input_mode == "Position") else ""
+        position_link = self.position_link_entry.get().strip() if (mode == "Recruiter" and self._recruiter_input_mode == "Position") else ""
 
         if not names or not emails or not company:
             self._set_status("Fill in all fields.", ok=False)
@@ -224,9 +265,13 @@ class App(ctk.CTk):
 
         subject = self.subject_entry.get().strip().replace("{company}", company)
 
-        if mode == "Recruiter" and not job_ids:
-            self._set_status("Enter at least one Job ID.", ok=False)
-            return
+        if mode == "Recruiter":
+            if self._recruiter_input_mode == "Job IDs" and not job_ids:
+                self._set_status("Enter at least one Job ID.", ok=False)
+                return
+            if self._recruiter_input_mode == "Position" and not position_name:
+                self._set_status("Enter a position name.", ok=False)
+                return
 
         if not subject:
             self._set_status("Subject cannot be empty.", ok=False)
@@ -256,6 +301,30 @@ class App(ctk.CTk):
 
             body_template = self._body_text
 
+            if mode == "Recruiter" and self._recruiter_input_mode == "Position":
+                pos_names = [n.strip() for n in position_name.split(",") if n.strip()]
+                pos_links = [l.strip() for l in position_link.split(",") if l.strip()]
+                pos_count = len(pos_names)
+                linked_parts = [
+                    f'<a href="{pos_links[i]}">{pname}</a>' if i < len(pos_links) and pos_links[i] else pname
+                    for i, pname in enumerate(pos_names)
+                ]
+                link_html = ", ".join(linked_parts)
+                pos_phrase = "a position" if pos_count == 1 else f"{pos_count} positions"
+                role_word = "role" if pos_count == 1 else "roles"
+                body_template = body_template.replace(
+                    "a few positions at {company} (Job ID(s): {job_ids})",
+                    f"{link_html} {role_word} at {{company}}"
+                )
+                body_template = body_template.replace("a few positions", pos_phrase)
+                if pos_count == 1:
+                    body_template = body_template.replace("relevant across all of these roles", "relevant to this role")
+                else:
+                    body_template = body_template.replace("all of these roles", f"these {pos_count} roles")
+
+            job_count = len([j for j in job_ids.split(",") if j.strip()]) if (mode == "Recruiter" and self._recruiter_input_mode == "Job IDs") else 0
+            position_phrase = "a position" if job_count == 1 else f"{job_count} positions"
+
             for name, email in zip(names, emails):
                 url_extension = read_data()["url_extension"]
                 body = (body_template
@@ -263,6 +332,10 @@ class App(ctk.CTk):
                     .replace("{company}", company)
                     .replace("{url_extension}", str(url_extension))
                     .replace("{job_ids}", job_ids))
+                if mode == "Recruiter" and self._recruiter_input_mode == "Job IDs":
+                    body = body.replace("a few positions", position_phrase).replace("Job ID(s):", "Job ID:" if job_count == 1 else "Job IDs:")
+                    if job_count > 1:
+                        body = body.replace("all of these roles", f"these {job_count} roles")
                 mail = outlook.CreateItem(0)
                 mail.To       = email
                 mail.Subject  = subject
@@ -282,7 +355,11 @@ class App(ctk.CTk):
             self.email_entry.delete(0, "end")
             self.company_entry.delete(0, "end")
             if mode == "Recruiter":
-                self.job_ids_entry.delete(0, "end")
+                if self._recruiter_input_mode == "Job IDs":
+                    self.job_ids_entry.delete(0, "end")
+                else:
+                    self.position_name_entry.delete(0, "end")
+                    self.position_link_entry.delete(0, "end")
             self.subject_entry.delete(0, "end")
             self.subject_entry.insert(0, DEFAULT_SUBJECT_FOUNDER if mode == "Founder" else DEFAULT_SUBJECT_RECRUITER)
             self._body_text = read_template_raw(mode)
