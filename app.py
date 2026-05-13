@@ -266,7 +266,7 @@ class App(ctk.CTk):
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, default_date.strftime("%m/%d/%Y"))
         self.time_entry.delete(0, "end")
-        self.time_entry.insert(0, "10:10 AM")
+        self.time_entry.insert(0, "9:10 AM")
 
     def _set_status(self, msg: str, ok: bool = True):
         self.status.configure(text=msg, text_color=("green" if ok else "red"))

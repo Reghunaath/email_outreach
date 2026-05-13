@@ -39,7 +39,7 @@ class FollowUpApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Follow-up")
-        self.geometry("590x640")
+        self.geometry("590x690")
         self.resizable(False, False)
         self._outlook    = None
         self._mail_items = []  # list of (BooleanVar, outlook_mail_item)
@@ -73,6 +73,22 @@ class FollowUpApp(ctk.CTk):
             fg_color="transparent", border_width=1,
             command=self._load_sent_emails,
         ).pack(side="right")
+
+        # ── Date filter ──
+        filter_frame = ctk.CTkFrame(self, fg_color="transparent")
+        filter_frame.pack(padx=24, pady=(0, 8), fill="x")
+        self._filter_from = ctk.CTkEntry(filter_frame, placeholder_text="From MM/DD/YYYY", width=248, height=34)
+        self._filter_from.pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(filter_frame, text="→", text_color="gray").pack(side="left", padx=(0, 8))
+        self._filter_to = ctk.CTkEntry(filter_frame, placeholder_text="To MM/DD/YYYY", width=248, height=34)
+        self._filter_to.pack(side="left")
+
+        today        = datetime.now().date()
+        this_monday  = today - timedelta(days=today.weekday())
+        past_monday  = this_monday - timedelta(days=7)
+        past_sunday  = this_monday - timedelta(days=1)
+        self._filter_from.insert(0, past_monday.strftime("%m/%d/%Y"))
+        self._filter_to.insert(0, past_sunday.strftime("%m/%d/%Y"))
 
         # ── Scrollable email list ──
         self.scroll_frame = ctk.CTkScrollableFrame(self, width=526, height=260)
@@ -114,6 +130,17 @@ class FollowUpApp(ctk.CTk):
             widget.destroy()
         self._mail_items.clear()
 
+        filter_from = filter_to = None
+        try:
+            from_str = self._filter_from.get().strip()
+            to_str   = self._filter_to.get().strip()
+            if from_str:
+                filter_from = datetime.strptime(from_str, "%m/%d/%Y").date()
+            if to_str:
+                filter_to = datetime.strptime(to_str, "%m/%d/%Y").date()
+        except ValueError:
+            pass
+
         try:
             if self._outlook is None:
                 self._outlook = win32com.client.Dispatch("Outlook.Application")
@@ -127,6 +154,11 @@ class FollowUpApp(ctk.CTk):
                 if count >= MAX_SENT_EMAILS:
                     break
                 try:
+                    sent_date = item.SentOn.date()
+                    if filter_from and sent_date < filter_from:
+                        break  # items are sorted descending; nothing older will match
+                    if filter_to and sent_date > filter_to:
+                        continue
                     to_field = item.To or ""
                     subject  = item.Subject or "(no subject)"
                     date_str = item.SentOn.strftime("%b %d")
@@ -164,7 +196,7 @@ class FollowUpApp(ctk.CTk):
         self._update_geometry()
 
     def _update_geometry(self):
-        h = 640
+        h = 690
         if self.send_mode.get() == "Schedule":
             h += 60
         self.geometry(f"590x{h}")
@@ -177,7 +209,7 @@ class FollowUpApp(ctk.CTk):
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, default_date.strftime("%m/%d/%Y"))
         self.time_entry.delete(0, "end")
-        self.time_entry.insert(0, "10:10 AM")
+        self.time_entry.insert(0, "9:10 AM")
 
     def _set_status(self, msg: str, ok: bool = True):
         self.status.configure(text=msg, text_color=("green" if ok else "red"))
