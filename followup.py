@@ -24,11 +24,22 @@ def parse_first_name(body: str) -> str:
     return "there"
 
 
+def parse_company(body: str) -> str:
+    for pattern in [
+        r"I stumbled upon (.+?) recently",          # Founder
+        r"I'm genuinely excited about (.+?) and",   # Recruiter / Hiring Manager
+    ]:
+        match = re.search(pattern, body)
+        if match:
+            return match.group(1).strip()
+    return "N/A"
+
+
 class FollowUpApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Follow-up")
-        self.geometry("420x640")
+        self.geometry("590x640")
         self.resizable(False, False)
         self._outlook    = None
         self._mail_items = []  # list of (BooleanVar, outlook_mail_item)
@@ -46,7 +57,7 @@ class FollowUpApp(ctk.CTk):
         ).pack(padx=24, pady=(0, 8), anchor="w")
 
         self.mode_toggle = ctk.CTkSegmentedButton(
-            self, values=["Founder", "Recruiter"], width=372
+            self, values=["Founder", "Recruiter"], width=542
         )
         self.mode_toggle.set("Recruiter")
         self.mode_toggle.pack(padx=24, pady=(0, 10))
@@ -64,7 +75,7 @@ class FollowUpApp(ctk.CTk):
         ).pack(side="right")
 
         # ── Scrollable email list ──
-        self.scroll_frame = ctk.CTkScrollableFrame(self, width=356, height=260)
+        self.scroll_frame = ctk.CTkScrollableFrame(self, width=526, height=260)
         self.scroll_frame.pack(padx=24, pady=(0, 10))
 
         # ── When ──
@@ -73,24 +84,24 @@ class FollowUpApp(ctk.CTk):
         ).pack(padx=24, pady=(8, 8), anchor="w")
 
         self.send_mode = ctk.CTkSegmentedButton(
-            self, values=["Send Now", "Schedule"], command=self._toggle_schedule, width=372
+            self, values=["Send Now", "Schedule"], command=self._toggle_schedule, width=542
         )
         self.send_mode.set("Send Now")
         self.send_mode.pack(padx=24, pady=(0, 10))
 
         self.schedule_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.date_entry = ctk.CTkEntry(
-            self.schedule_frame, placeholder_text="MM/DD/YYYY", width=178, height=38
+            self.schedule_frame, placeholder_text="MM/DD/YYYY", width=263, height=38
         )
         self.date_entry.pack(side="left", padx=(0, 16))
         self.time_entry = ctk.CTkEntry(
-            self.schedule_frame, placeholder_text="HH:MM AM/PM", width=178, height=38
+            self.schedule_frame, placeholder_text="HH:MM AM/PM", width=263, height=38
         )
         self.time_entry.pack(side="left")
 
         # ── Send button ──
         self.send_btn = ctk.CTkButton(
-            self, text="Send", width=372, height=42, command=self._send
+            self, text="Send", width=542, height=42, command=self._send
         )
         self.send_btn.pack(padx=24, pady=(16, 10))
 
@@ -119,15 +130,17 @@ class FollowUpApp(ctk.CTk):
                     to_field = item.To or ""
                     subject  = item.Subject or "(no subject)"
                     date_str = item.SentOn.strftime("%b %d")
-                    name     = parse_first_name(item.Body or "")
-                    truncated_subject = subject[:38] + "…" if len(subject) > 38 else subject
-                    label    = f"{name}  ·  {truncated_subject}  ·  {date_str}"
+                    body     = item.Body or ""
+                    name     = parse_first_name(body)
+                    company  = parse_company(body)
+                    truncated_subject = subject[:55] + "…" if len(subject) > 55 else subject
+                    label    = f"{name} ({company})  ·  {truncated_subject}  ·  {date_str}"
 
                     var = ctk.BooleanVar(value=False)
                     ctk.CTkCheckBox(
                         self.scroll_frame, text=label,
                         variable=var, onvalue=True, offvalue=False,
-                        width=340,
+                        width=510,
                     ).pack(anchor="w", pady=3)
                     self._mail_items.append((var, item))
                     count += 1
@@ -154,7 +167,7 @@ class FollowUpApp(ctk.CTk):
         h = 640
         if self.send_mode.get() == "Schedule":
             h += 60
-        self.geometry(f"420x{h}")
+        self.geometry(f"590x{h}")
 
     def _set_schedule_defaults(self):
         now          = datetime.now()
