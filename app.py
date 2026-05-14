@@ -11,7 +11,8 @@ ctk.set_default_color_theme("blue")
 TEMPLATE_FILE                = "template.html"
 TEMPLATE_RECRUITER_FILE      = "template_recruiter.html"
 TEMPLATE_HIRING_MANAGER_FILE = "template_hiring_manager.html"
-RESUME_FILE             = "Reghunaath_Resume_May_N.pdf"
+RESUME_FILE_CSHARP      = "Reghunaath_Resume_May_N.pdf"
+RESUME_FILE_JAVA        = "Reghunaath_Resume_May_J.pdf"
 DATA_FILE               = "data.json"
 LOG_FILE                = "log.csv"
 
@@ -89,62 +90,65 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Email Outreach")
-        self.geometry("420x672")
+        self.geometry("420x700")
         self.resizable(False, False)
-        self._body_text = read_template_raw("Founder")
+        self._body_text = read_template_raw("Recruiter")
         self._recruiter_input_mode = "Job IDs"
         self._build_ui()
 
     def _build_ui(self):
+        c = ctk.CTkScrollableFrame(self, width=396)
+        c.pack(fill="both", expand=True)
+
         ctk.CTkLabel(
-            self, text="Email Outreach", font=ctk.CTkFont(size=20, weight="bold")
+            c, text="Email Outreach", font=ctk.CTkFont(size=20, weight="bold")
         ).pack(padx=24, pady=(24, 20), anchor="w")
 
         # ── Mode ──
         ctk.CTkLabel(
-            self, text="MODE", font=ctk.CTkFont(size=11), text_color="gray"
+            c, text="MODE", font=ctk.CTkFont(size=11), text_color="gray"
         ).pack(padx=24, pady=(0, 8), anchor="w")
 
         self.mode_toggle = ctk.CTkSegmentedButton(
-            self, values=["Founder", "Recruiter", "Hiring Manager"], command=self._toggle_mode, width=372
+            c, values=["Founder", "Recruiter", "Hiring Manager"], command=self._toggle_mode, width=372
         )
-        self.mode_toggle.set("Founder")
+        self.mode_toggle.set("Recruiter")
         self.mode_toggle.pack(padx=24, pady=(0, 10))
 
         # ── Recipient ──
         ctk.CTkLabel(
-            self, text="RECIPIENT", font=ctk.CTkFont(size=11), text_color="gray"
+            c, text="RECIPIENT", font=ctk.CTkFont(size=11), text_color="gray"
         ).pack(padx=24, pady=(8, 8), anchor="w")
 
-        self.name_entry    = ctk.CTkEntry(self, placeholder_text="Name",    width=372, height=38)
-        self.email_entry   = ctk.CTkEntry(self, placeholder_text="Email",   width=372, height=38)
-        self.company_entry = ctk.CTkEntry(self, placeholder_text="Company", width=372, height=38)
+        self.name_entry    = ctk.CTkEntry(c, placeholder_text="Name",    width=372, height=38)
+        self.email_entry   = ctk.CTkEntry(c, placeholder_text="Email",   width=372, height=38)
+        self.company_entry = ctk.CTkEntry(c, placeholder_text="Company", width=372, height=38)
         for entry in (self.name_entry, self.email_entry, self.company_entry):
             entry.pack(padx=24, pady=(0, 10))
 
         # Recruiter sub-toggle — hidden until Recruiter mode is selected
         self.recruiter_sub_toggle = ctk.CTkSegmentedButton(
-            self, values=["Job IDs", "Position"],
+            c, values=["Job IDs", "Position"],
             command=self._toggle_recruiter_input, width=372
         )
         self.recruiter_sub_toggle.set("Job IDs")
 
         # Job IDs entry — hidden until Recruiter + Job IDs sub-mode
         self.job_ids_entry = ctk.CTkEntry(
-            self, placeholder_text="Job IDs (e.g. 12345, 67890)", width=372, height=38
+            c, placeholder_text="Job IDs (e.g. 12345, 67890)", width=372, height=38
         )
 
         # Position fields — hidden until Recruiter + Position sub-mode
         self.position_name_entry = ctk.CTkEntry(
-            self, placeholder_text="Position Name(s), comma-separated", width=372, height=38
+            c, placeholder_text="Position Name(s), comma-separated", width=372, height=38
         )
         self.position_link_entry = ctk.CTkEntry(
-            self, placeholder_text="Job URL(s), comma-separated (optional)", width=372, height=38
+            c, placeholder_text="Job URL(s), comma-separated (optional)", width=372, height=38
         )
 
         # Subject — always visible, pre-filled with mode default
         self.subject_entry = ctk.CTkComboBox(
-            self, width=372, height=38,
+            c, width=372, height=38,
             values=[DEFAULT_SUBJECT_FOUNDER, DEFAULT_SUBJECT_LINKEDIN],
         )
         self.subject_entry.set(DEFAULT_SUBJECT_FOUNDER)
@@ -152,26 +156,37 @@ class App(ctk.CTk):
 
         # ── Edit Body button ──
         self.edit_body_btn = ctk.CTkButton(
-            self, text="Edit Body", width=372, height=38,
+            c, text="Edit Body", width=372, height=38,
             fg_color="transparent", border_width=1,
             command=self._open_body_modal,
         )
         self.edit_body_btn.pack(padx=24, pady=(0, 10))
 
+        # ── Stack ──
+        ctk.CTkLabel(
+            c, text="STACK", font=ctk.CTkFont(size=11), text_color="gray"
+        ).pack(padx=24, pady=(8, 8), anchor="w")
+
+        self.stack_toggle = ctk.CTkSegmentedButton(
+            c, values=["C#", "Java"], width=372
+        )
+        self.stack_toggle.set("C#")
+        self.stack_toggle.pack(padx=24, pady=(0, 10))
+
         # ── When ──
         self.when_label = ctk.CTkLabel(
-            self, text="WHEN", font=ctk.CTkFont(size=11), text_color="gray"
+            c, text="WHEN", font=ctk.CTkFont(size=11), text_color="gray"
         )
         self.when_label.pack(padx=24, pady=(8, 8), anchor="w")
 
         self.send_mode = ctk.CTkSegmentedButton(
-            self, values=["Send Now", "Schedule"], command=self._toggle_schedule, width=372
+            c, values=["Send Now", "Schedule"], command=self._toggle_schedule, width=372
         )
         self.send_mode.set("Schedule")
         self.send_mode.pack(padx=24, pady=(0, 10))
 
         # Schedule date/time row (hidden initially)
-        self.schedule_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.schedule_frame = ctk.CTkFrame(c, fg_color="transparent")
         self.date_entry = ctk.CTkEntry(
             self.schedule_frame, placeholder_text="MM/DD/YYYY", width=178, height=38
         )
@@ -183,14 +198,15 @@ class App(ctk.CTk):
 
         # ── Send button ──
         self.send_btn = ctk.CTkButton(
-            self, text="Send", width=372, height=42, command=self._send
+            c, text="Send", width=372, height=42, command=self._send
         )
         self.send_btn.pack(padx=24, pady=(16, 10))
 
         # ── Status ──
-        self.status = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=12))
+        self.status = ctk.CTkLabel(c, text="", font=ctk.CTkFont(size=12))
         self.status.pack(padx=24)
 
+        self._toggle_mode("Recruiter")
         self._toggle_schedule("Schedule")
 
     def _open_body_modal(self):
@@ -208,7 +224,6 @@ class App(ctk.CTk):
             self.job_ids_entry.pack_forget()
             self.position_name_entry.pack(padx=24, pady=(0, 10), before=self.subject_entry)
             self.position_link_entry.pack(padx=24, pady=(0, 10), before=self.subject_entry)
-        self._update_geometry()
 
     def _toggle_mode(self, value: str):
         if value in ("Recruiter", "Hiring Manager"):
@@ -227,7 +242,6 @@ class App(ctk.CTk):
             self.subject_entry.configure(values=[DEFAULT_SUBJECT_FOUNDER, DEFAULT_SUBJECT_LINKEDIN])
             self.subject_entry.set(DEFAULT_SUBJECT_FOUNDER)
         self._body_text = read_template_raw(value)
-        self._update_geometry()
 
     def _toggle_schedule(self, value: str):
         if value == "Schedule":
@@ -235,19 +249,6 @@ class App(ctk.CTk):
             self._set_schedule_defaults()
         else:
             self.schedule_frame.pack_forget()
-        self._update_geometry()
-
-    def _update_geometry(self):
-        h = 672
-        if self.mode_toggle.get() in ("Recruiter", "Hiring Manager"):
-            h += 48  # sub-toggle
-            if self._recruiter_input_mode == "Job IDs":
-                h += 48  # job_ids_entry
-            else:
-                h += 96  # position_name + position_link
-        if self.send_mode.get() == "Schedule":
-            h += 60
-        self.geometry(f"420x{h}")
 
     def _set_schedule_defaults(self):
         now     = datetime.now()
@@ -319,7 +320,8 @@ class App(ctk.CTk):
 
         try:
             outlook = win32com.client.Dispatch("Outlook.Application")
-            resume_path = str(Path(RESUME_FILE).resolve())
+            resume_file = RESUME_FILE_JAVA if self.stack_toggle.get() == "Java" else RESUME_FILE_CSHARP
+            resume_path = str(Path(resume_file).resolve())
 
             body_template = self._body_text
 
@@ -358,6 +360,8 @@ class App(ctk.CTk):
                     body = body.replace("a few positions", position_phrase).replace("Job ID(s):", "Job ID:" if job_count == 1 else "Job IDs:")
                     if job_count > 1:
                         body = body.replace("all of these roles", f"these {job_count} roles")
+                if self.stack_toggle.get() == "Java":
+                    body = body.replace("(.NET, FastAPI, React and Node.js)", "(Spring Boot, FastAPI, React and Node.js)")
                 mail = outlook.CreateItem(0)
                 mail.To       = email
                 mail.Subject  = subject
