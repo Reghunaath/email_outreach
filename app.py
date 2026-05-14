@@ -131,7 +131,7 @@ class App(ctk.CTk):
             c, values=["Job IDs", "Position"],
             command=self._toggle_recruiter_input, width=372
         )
-        self.recruiter_sub_toggle.set("Job IDs")
+        self.recruiter_sub_toggle.set("Position")
 
         # Job IDs entry — hidden until Recruiter + Job IDs sub-mode
         self.job_ids_entry = ctk.CTkEntry(
@@ -228,9 +228,9 @@ class App(ctk.CTk):
     def _toggle_mode(self, value: str):
         if value in ("Recruiter", "Hiring Manager"):
             self.recruiter_sub_toggle.pack(padx=24, pady=(0, 10), before=self.subject_entry)
-            self.job_ids_entry.pack(padx=24, pady=(0, 10), before=self.subject_entry)
-            self._recruiter_input_mode = "Job IDs"
-            self.recruiter_sub_toggle.set("Job IDs")
+            self._recruiter_input_mode = "Position"
+            self.recruiter_sub_toggle.set("Position")
+            self._toggle_recruiter_input("Position")
             self.subject_entry.configure(values=[DEFAULT_SUBJECT_RECRUITER, DEFAULT_SUBJECT_LINKEDIN])
             self.subject_entry.set(DEFAULT_SUBJECT_RECRUITER)
         else:

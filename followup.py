@@ -44,7 +44,6 @@ class FollowUpApp(ctk.CTk):
         self._outlook    = None
         self._mail_items = []  # list of (BooleanVar, outlook_mail_item)
         self._build_ui()
-        self._load_sent_emails()
 
     def _build_ui(self):
         ctk.CTkLabel(
@@ -63,25 +62,22 @@ class FollowUpApp(ctk.CTk):
         self.mode_toggle.pack(padx=24, pady=(0, 10))
 
         # ── Sent emails header ──
-        header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        header_frame.pack(padx=24, pady=(8, 8), fill="x")
         ctk.CTkLabel(
-            header_frame, text="SENT EMAILS", font=ctk.CTkFont(size=11), text_color="gray"
-        ).pack(side="left")
-        ctk.CTkButton(
-            header_frame, text="Refresh", width=72, height=26,
-            fg_color="transparent", border_width=1,
-            command=self._load_sent_emails,
-        ).pack(side="right")
+            self, text="SENT EMAILS", font=ctk.CTkFont(size=11), text_color="gray"
+        ).pack(padx=24, pady=(8, 8), anchor="w")
 
-        # ── Date filter ──
+        # ── Date filter + Search ──
         filter_frame = ctk.CTkFrame(self, fg_color="transparent")
         filter_frame.pack(padx=24, pady=(0, 8), fill="x")
-        self._filter_from = ctk.CTkEntry(filter_frame, placeholder_text="From MM/DD/YYYY", width=248, height=34)
+        self._filter_from = ctk.CTkEntry(filter_frame, placeholder_text="From MM/DD/YYYY", width=190, height=34)
         self._filter_from.pack(side="left", padx=(0, 8))
         ctk.CTkLabel(filter_frame, text="→", text_color="gray").pack(side="left", padx=(0, 8))
-        self._filter_to = ctk.CTkEntry(filter_frame, placeholder_text="To MM/DD/YYYY", width=248, height=34)
-        self._filter_to.pack(side="left")
+        self._filter_to = ctk.CTkEntry(filter_frame, placeholder_text="To MM/DD/YYYY", width=190, height=34)
+        self._filter_to.pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            filter_frame, text="Search", width=110, height=34,
+            command=self._load_sent_emails,
+        ).pack(side="left")
 
         today        = datetime.now().date()
         this_monday  = today - timedelta(days=today.weekday())
@@ -92,7 +88,10 @@ class FollowUpApp(ctk.CTk):
 
         # ── Scrollable email list ──
         self.scroll_frame = ctk.CTkScrollableFrame(self, width=526, height=260)
-        self.scroll_frame.pack(padx=24, pady=(0, 10))
+        self.scroll_frame.pack(padx=24, pady=(0, 4))
+
+        self._count_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=11), text_color="gray")
+        self._count_label.pack(padx=24, pady=(0, 8), anchor="e")
 
         # ── When ──
         ctk.CTkLabel(
@@ -125,6 +124,34 @@ class FollowUpApp(ctk.CTk):
         self.status = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=12))
         self.status.pack(padx=24)
 
+    def _get_replied_conv_ids(self, items: list, filter_from) -> set:
+        replied = set()
+        if not items or filter_from is None:
+            return replied
+        try:
+            namespace = self._outlook.GetNamespace("MAPI")
+            inbox     = namespace.GetDefaultFolder(6)  # olFolderInbox
+
+            target_conv_ids = {item.ConversationID for item in items}
+
+            inbox_items = inbox.Items
+            inbox_items.Sort("[ReceivedTime]", True)  # descending
+            today = datetime.now().date()
+            for inbox_item in inbox_items:
+                try:
+                    received_date = inbox_item.ReceivedTime.date()
+                    if received_date > today:
+                        continue
+                    if received_date < filter_from:
+                        break  # sorted descending; nothing older will match
+                    if inbox_item.ConversationID in target_conv_ids:
+                        replied.add(inbox_item.ConversationID)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return replied
+
     def _load_sent_emails(self):
         for widget in self.scroll_frame.winfo_children():
             widget.destroy()
@@ -149,6 +176,7 @@ class FollowUpApp(ctk.CTk):
             items       = sent_folder.Items
             items.Sort("[SentOn]", True)
 
+            collected = []
             count = 0
             for item in items:
                 if count >= MAX_SENT_EMAILS:
@@ -159,30 +187,46 @@ class FollowUpApp(ctk.CTk):
                         break  # items are sorted descending; nothing older will match
                     if filter_to and sent_date > filter_to:
                         continue
-                    to_field = item.To or ""
+                    collected.append(item)
+                    count += 1
+                except Exception:
+                    continue
+
+            replied_conv_ids = self._get_replied_conv_ids(collected, filter_from)
+
+            for item in collected:
+                try:
                     subject  = item.Subject or "(no subject)"
                     date_str = item.SentOn.strftime("%b %d")
                     body     = item.Body or ""
                     name     = parse_first_name(body)
                     company  = parse_company(body)
                     truncated_subject = subject[:55] + "…" if len(subject) > 55 else subject
-                    label    = f"{name} ({company})  ·  {truncated_subject}  ·  {date_str}"
+                    has_reply = item.ConversationID in replied_conv_ids
+                    reply_tag = "  ↩" if has_reply else ""
+                    label     = f"{name} ({company})  ·  {truncated_subject}  ·  {date_str}{reply_tag}"
 
                     var = ctk.BooleanVar(value=False)
-                    ctk.CTkCheckBox(
+                    cb  = ctk.CTkCheckBox(
                         self.scroll_frame, text=label,
                         variable=var, onvalue=True, offvalue=False,
                         width=510,
-                    ).pack(anchor="w", pady=3)
+                    )
+                    if has_reply:
+                        cb.configure(text_color="gray")
+                    cb.pack(anchor="w", pady=3)
                     self._mail_items.append((var, item))
-                    count += 1
                 except Exception:
                     continue
 
-            if count == 0:
+            if not collected:
                 ctk.CTkLabel(
                     self.scroll_frame, text="No sent emails found.", text_color="gray"
                 ).pack(pady=20)
+                self._count_label.configure(text="")
+            else:
+                n = len(collected)
+                self._count_label.configure(text=f"{n} email{'s' if n != 1 else ''} found")
 
         except Exception as e:
             self._set_status(f"Could not load emails: {e}", ok=False)
