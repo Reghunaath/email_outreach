@@ -126,6 +126,13 @@ class App(ctk.CTk):
         for entry in (self.name_entry, self.email_entry, self.company_entry):
             entry.pack(padx=24, pady=(0, 10))
 
+        # Paste button — hidden until Recruiter/Hiring Manager mode
+        self.paste_btn = ctk.CTkButton(
+            c, text="Paste from Excel", width=372, height=38,
+            fg_color="transparent", border_width=1,
+            command=self._paste_from_clipboard,
+        )
+
         # Recruiter sub-toggle — hidden until Recruiter mode is selected
         self.recruiter_sub_toggle = ctk.CTkSegmentedButton(
             c, values=["Job IDs", "Position"],
@@ -228,12 +235,14 @@ class App(ctk.CTk):
     def _toggle_mode(self, value: str):
         if value in ("Recruiter", "Hiring Manager"):
             self.recruiter_sub_toggle.pack(padx=24, pady=(0, 10), before=self.subject_entry)
+            self.paste_btn.pack(padx=24, pady=(0, 10), before=self.recruiter_sub_toggle)
             self._recruiter_input_mode = "Position"
             self.recruiter_sub_toggle.set("Position")
             self._toggle_recruiter_input("Position")
             self.subject_entry.configure(values=[DEFAULT_SUBJECT_RECRUITER, DEFAULT_SUBJECT_LINKEDIN])
             self.subject_entry.set(DEFAULT_SUBJECT_RECRUITER)
         else:
+            self.paste_btn.pack_forget()
             self.recruiter_sub_toggle.pack_forget()
             self.job_ids_entry.pack_forget()
             self.position_name_entry.pack_forget()
@@ -242,6 +251,35 @@ class App(ctk.CTk):
             self.subject_entry.configure(values=[DEFAULT_SUBJECT_FOUNDER, DEFAULT_SUBJECT_LINKEDIN])
             self.subject_entry.set(DEFAULT_SUBJECT_FOUNDER)
         self._body_text = read_template_raw(value)
+
+    def _paste_from_clipboard(self):
+        try:
+            text = self.clipboard_get()
+        except Exception:
+            self._set_status("Clipboard is empty or unreadable.", ok=False)
+            return
+
+        parts = text.strip().split("\t")
+        if len(parts) < 5:
+            self._set_status("Clipboard format not recognized (need 5 tab-separated columns).", ok=False)
+            return
+
+        company, job_url, names_raw, emails_raw, position = (parts[i].strip() for i in range(5))
+
+        self.recruiter_sub_toggle.set("Position")
+        self._toggle_recruiter_input("Position")
+
+        for entry, value in (
+            (self.company_entry,       company),
+            (self.name_entry,          names_raw),
+            (self.email_entry,         emails_raw),
+            (self.position_name_entry, position),
+            (self.position_link_entry, job_url),
+        ):
+            entry.delete(0, "end")
+            entry.insert(0, value)
+
+        self._set_status("Pasted from clipboard.")
 
     def _toggle_schedule(self, value: str):
         if value == "Schedule":
