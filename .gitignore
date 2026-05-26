@@ -1,5 +1,7 @@
 .env
 log.csv
+log_followup.csv
 data.json
+.claude/
 __pycache__/
 *.pyc
