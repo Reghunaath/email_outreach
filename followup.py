@@ -1,4 +1,5 @@
 import re
+import csv
 import customtkinter as ctk
 import win32com.client
 from pathlib import Path
@@ -9,7 +10,25 @@ ctk.set_default_color_theme("blue")
 
 TEMPLATE_FOLLOWUP_FOUNDER   = "template_followup_founder.html"
 TEMPLATE_FOLLOWUP_RECRUITER = "template_followup_recruiter.html"
-MAX_SENT_EMAILS             = 100
+MAX_SENT_EMAILS             = 500
+LOG_FILE                    = "log_followup.csv"
+LOG_HEADERS                 = ["name", "email", "company", "sent_at", "scheduled_for"]
+
+
+def log_email(name: str, email: str, company: str, scheduled_for: str = "") -> None:
+    log_path = Path(LOG_FILE)
+    write_header = not log_path.exists()
+    with log_path.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=LOG_HEADERS)
+        if write_header:
+            writer.writeheader()
+        writer.writerow({
+            "name":          name,
+            "email":         email,
+            "company":       company,
+            "sent_at":       datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "scheduled_for": scheduled_for,
+        })
 
 
 def read_template(mode: str) -> str:
@@ -101,7 +120,7 @@ class FollowUpApp(ctk.CTk):
         self.send_mode = ctk.CTkSegmentedButton(
             self, values=["Send Now", "Schedule"], command=self._toggle_schedule, width=542
         )
-        self.send_mode.set("Send Now")
+        self.send_mode.set("Schedule")
         self.send_mode.pack(padx=24, pady=(0, 10))
 
         self.schedule_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -123,6 +142,8 @@ class FollowUpApp(ctk.CTk):
         # ── Status ──
         self.status = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=12))
         self.status.pack(padx=24)
+
+        self._toggle_schedule("Schedule")
 
     def _get_replied_conv_ids(self, items: list, filter_from) -> set:
         replied = set()
@@ -283,14 +304,16 @@ class FollowUpApp(ctk.CTk):
 
         try:
             for _, mail_item in selected:
-                name  = parse_first_name(mail_item.Body or "")
-                body  = template.replace("{name}", name)
-                reply = mail_item.Reply()
+                name    = parse_first_name(mail_item.Body or "")
+                company = parse_company(mail_item.Body or "")
+                body    = template.replace("{name}", name)
+                reply   = mail_item.Reply()
                 reply.To = mail_item.To
                 reply.HTMLBody = body
                 if schedule_mode:
                     reply.DeferredDeliveryTime = dt.strftime("%m/%d/%Y %I:%M %p")
                 reply.Send()
+                log_email(name, mail_item.To, company, scheduled_for=dt.strftime("%Y-%m-%d %H:%M:%S") if schedule_mode else "")
 
             count = len(selected)
             if schedule_mode:
