@@ -228,14 +228,31 @@ class FollowUpApp(ctk.CTk):
                     label     = f"{name} ({company})  ·  {truncated_subject}  ·  {date_str}{reply_tag}"
 
                     var = ctk.BooleanVar(value=False)
-                    cb  = ctk.CTkCheckBox(
-                        self.scroll_frame, text=label,
+                    var.trace_add("write", lambda *_: self._update_selected_label())
+
+                    row = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
+                    row.pack(fill="x", pady=3, anchor="w")
+
+                    cb = ctk.CTkCheckBox(
+                        row, text="",
                         variable=var, onvalue=True, offvalue=False,
-                        width=510,
+                        width=24,
                     )
+                    cb.pack(side="left", anchor="w")
+
+                    copy_btn = ctk.CTkButton(
+                        row, text="📋", width=28, height=24,
+                        fg_color="transparent", hover_color=("gray85", "gray25"),
+                        font=ctk.CTkFont(size=13),
+                        command=lambda c=company: self._copy_to_clipboard(c),
+                    )
+                    copy_btn.pack(side="left", padx=(2, 6))
+
+                    lbl = ctk.CTkLabel(row, text=label, anchor="w")
                     if has_reply:
-                        cb.configure(text_color="gray")
-                    cb.pack(anchor="w", pady=3)
+                        lbl.configure(text_color="gray")
+                    lbl.pack(side="left", anchor="w")
+
                     self._mail_items.append((var, item))
                 except Exception:
                     continue
@@ -251,6 +268,19 @@ class FollowUpApp(ctk.CTk):
 
         except Exception as e:
             self._set_status(f"Could not load emails: {e}", ok=False)
+
+    def _update_selected_label(self):
+        n     = sum(1 for var, _ in self._mail_items if var.get())
+        total = len(self._mail_items)
+        if n:
+            self._count_label.configure(text=f"{n} selected · {total} found")
+        else:
+            self._count_label.configure(text=f"{total} email{'s' if total != 1 else ''} found")
+
+    def _copy_to_clipboard(self, text: str):
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self._set_status(f'Copied "{text}" to clipboard.')
 
     def _toggle_schedule(self, value: str):
         if value == "Schedule":
