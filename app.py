@@ -125,6 +125,7 @@ class App(ctk.CTk):
         self.company_entry = ctk.CTkEntry(c, placeholder_text="Company", width=372, height=38)
         for entry in (self.name_entry, self.email_entry, self.company_entry):
             entry.pack(padx=24, pady=(0, 10))
+        self.name_entry.bind("<<Paste>>", lambda e: self.after(0, self._capitalize_name_entry))
 
         # Paste button — hidden until Recruiter/Hiring Manager mode
         self.paste_btn = ctk.CTkButton(
@@ -252,6 +253,13 @@ class App(ctk.CTk):
             self.subject_entry.set(DEFAULT_SUBJECT_FOUNDER)
         self._body_text = read_template_raw(value)
 
+    def _capitalize_name_entry(self):
+        text = self.name_entry.get()
+        capitalized = ", ".join(n.strip().title() for n in text.split(",") if n.strip())
+        if text != capitalized:
+            self.name_entry.delete(0, "end")
+            self.name_entry.insert(0, capitalized)
+
     def _paste_from_clipboard(self):
         try:
             text = self.clipboard_get()
@@ -279,6 +287,7 @@ class App(ctk.CTk):
             entry.delete(0, "end")
             entry.insert(0, value)
 
+        self._capitalize_name_entry()
         self._set_status("Pasted from clipboard.")
 
     def _toggle_schedule(self, value: str):
