@@ -2,6 +2,7 @@
 log.csv
 log_followup.csv
 data.json
+email_finder/apollo_creds.json
 .claude/
 __pycache__/
 *.pyc
