@@ -250,10 +250,10 @@ class ApolloFinderApp(ctk.CTk):
                 first_name = (contact.get("first_name") or person.get("first_name", "")).strip().title()
                 email = contact.get("email", "")
                 email_status = contact.get("email_status", "")
-                if first_name:
-                    names.append(first_name)
                 if email and email_status != "unavailable":
                     emails.append(email)
+                    if first_name:
+                        names.append(first_name)
             except Exception as exc:
                 errors.append(f"{url} ({exc})")
 
