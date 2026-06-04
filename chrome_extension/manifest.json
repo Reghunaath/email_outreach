@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "LinkedIn URL Collector",
+  "version": "1.0",
+  "description": "Copies all open LinkedIn profile URLs to clipboard for the email finder app.",
+  "permissions": ["tabs"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Copy LinkedIn URLs"
+  }
+}

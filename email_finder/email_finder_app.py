@@ -1,6 +1,9 @@
+import csv
 import json
 import time
 import threading
+from collections import Counter
+from datetime import datetime
 from pathlib import Path
 import requests
 import customtkinter as ctk
@@ -10,6 +13,21 @@ ctk.set_default_color_theme("blue")
 
 BASE_URL   = "https://app.apollo.io"
 CREDS_FILE = Path(__file__).parent / "apollo_creds.json"
+LOG_FILE   = Path(__file__).parent.parent / "log_email_finder.csv"
+LOG_HEADERS = ["url", "name", "email", "type", "logged_at"]
+
+
+def _log_results(entries: list[dict]) -> None:
+    if not entries:
+        return
+    write_header = not LOG_FILE.exists()
+    with LOG_FILE.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=LOG_HEADERS)
+        if write_header:
+            writer.writeheader()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for entry in entries:
+            writer.writerow({**entry, "logged_at": now})
 
 _HEADERS_BASE = {
     "Content-Type": "application/json",
@@ -39,6 +57,7 @@ def _find_person(session: requests.Session, headers: dict, linkedin_url: str) ->
         f"{BASE_URL}/api/v1/mixed_people/search",
         headers=headers,
         json={"person_linkedin_urls": [linkedin_url], "page": 1, "per_page": 1},
+        timeout=15,
     )
     resp.raise_for_status()
     people = resp.json().get("people", [])
@@ -49,6 +68,7 @@ def _find_person(session: requests.Session, headers: dict, linkedin_url: str) ->
         f"{BASE_URL}/api/v1/contacts/search",
         headers=headers,
         json={"person_linkedin_urls": [linkedin_url], "page": 1, "per_page": 1},
+        timeout=15,
     )
     resp2.raise_for_status()
     contacts = resp2.json().get("contacts", [])
@@ -57,6 +77,7 @@ def _find_person(session: requests.Session, headers: dict, linkedin_url: str) ->
         return {
             "id": c.get("person_id"),
             "first_name": c.get("first_name"),
+            "last_name": c.get("last_name"),
             "organization": {"name": c.get("organization_name", "")},
             "_contact": c,
         }
@@ -74,10 +95,33 @@ def _reveal_email(session: requests.Session, headers: dict, person_id: str) -> d
             "cta_name": "Access email",
             "cacheKey": int(time.time() * 1000),
         },
+        timeout=15,
     )
     resp.raise_for_status()
     contacts = resp.json().get("contacts", [])
     return contacts[0] if contacts else {}
+
+
+def _detect_format(local: str, first: str, last: str) -> str | None:
+    f, l = first.lower(), last.lower()
+    if not f or not l:
+        return None
+    if local == f"{f}.{l}":    return "first.last"
+    if local == f:              return "first"
+    if local == f"{f[0]}.{l}": return "initial.last"
+    if local == f"{f}_{l}":    return "first_last"
+    if local == f"{f[0]}{l}":  return "initiallast"
+    return None
+
+
+def _apply_format(fmt: str, first: str, last: str, domain: str) -> str:
+    f, l = first.lower(), last.lower()
+    if fmt == "first.last":    return f"{f}.{l}@{domain}"
+    if fmt == "first":         return f"{f}@{domain}"
+    if fmt == "initial.last":  return f"{f[0]}.{l}@{domain}"
+    if fmt == "first_last":    return f"{f}_{l}@{domain}"
+    if fmt == "initiallast":   return f"{f[0]}{l}@{domain}"
+    return ""
 
 
 class ApolloFinderApp(ctk.CTk):
@@ -232,8 +276,7 @@ class ApolloFinderApp(ctk.CTk):
         session = requests.Session()
         session.cookies.update(_parse_cookies(cookies_str))
 
-        names: list[str] = []
-        emails: list[str] = []
+        people_data: list[dict] = []
         errors: list[str] = []
         total = len(urls)
 
@@ -247,22 +290,74 @@ class ApolloFinderApp(ctk.CTk):
                     errors.append(url)
                     continue
                 contact = person.get("_contact") or _reveal_email(session, headers, person["id"])
-                first_name = (contact.get("first_name") or person.get("first_name", "")).strip().title()
-                email = contact.get("email", "")
+                first_name   = (contact.get("first_name") or person.get("first_name", "")).strip().title()
+                last_name    = (contact.get("last_name")  or person.get("last_name",  "")).strip().title()
+                email        = contact.get("email", "")
                 email_status = contact.get("email_status", "")
-                if email and email_status != "unavailable":
-                    emails.append(email)
-                    if first_name:
-                        names.append(first_name)
+                valid_email  = email if (email and email_status != "unavailable") else None
+                people_data.append({
+                    "url":        url,
+                    "first_name": first_name,
+                    "last_name":  last_name,
+                    "email":      valid_email,
+                })
             except Exception as exc:
                 errors.append(f"{url} ({exc})")
 
-        self.after(0, lambda: self._on_fetch_done(names, emails, errors, total))
+        self.after(0, lambda: self._on_fetch_done(people_data, errors, total))
 
     def _on_fetch_done(
-        self, names: list[str], emails: list[str], errors: list[str], total: int
+        self, people_data: list[dict], errors: list[str], total: int
+    ) -> None:
+        try:
+            self._on_fetch_done_inner(people_data, errors, total)
+        except Exception as exc:
+            self.fetch_btn.configure(state="normal", text="Fetch & Copy")
+            self.status_label.configure(text=f"Error: {exc}", text_color="red")
+
+    def _on_fetch_done_inner(
+        self, people_data: list[dict], errors: list[str], total: int
     ) -> None:
         self.fetch_btn.configure(state="normal", text="Fetch & Copy")
+
+        found   = [p for p in people_data if p["email"]]
+        missing = [p for p in people_data if not p["email"] and p["first_name"]]
+
+        names  = [p["first_name"] for p in found]
+        emails = [p["email"] for p in found]
+        predicted_count = 0
+
+        log_entries = [
+            {"url": p["url"], "name": p["first_name"], "email": p["email"], "type": "found"}
+            for p in found
+        ]
+
+        if found and missing:
+            domains = [p["email"].split("@")[1] for p in found if "@" in p["email"]]
+            if domains:
+                domain = Counter(domains).most_common(1)[0][0]
+                format_votes = [
+                    fmt for p in found
+                    if p["last_name"] and "@" in p["email"]
+                    for fmt in [_detect_format(p["email"].split("@")[0], p["first_name"], p["last_name"])]
+                    if fmt
+                ]
+                if format_votes:
+                    dominant_fmt = Counter(format_votes).most_common(1)[0][0]
+                    for p in missing:
+                        if dominant_fmt == "first" or p["last_name"]:
+                            predicted = _apply_format(dominant_fmt, p["first_name"], p["last_name"], domain)
+                            if predicted:
+                                names.append(p["first_name"])
+                                emails.append(predicted)
+                                log_entries.append({"url": p["url"], "name": p["first_name"], "email": predicted, "type": "predicted"})
+                                predicted_count += 1
+
+        log_entries += [
+            {"url": e, "name": "", "email": "", "type": "failed"}
+            for e in errors
+        ]
+        _log_results(log_entries)
 
         if not names and not emails:
             first_err = f" — {errors[0]}" if errors else ""
@@ -271,14 +366,16 @@ class ApolloFinderApp(ctk.CTk):
             )
             return
 
-        names_str = ", ".join(names)
-        emails_str = ", ".join(emails)
         self.clipboard_clear()
-        self.clipboard_append(f"{names_str}\t{emails_str}")
+        self.clipboard_append(f"{', '.join(names)}\t{', '.join(emails)}")
 
-        error_note = f"  ({len(errors)} failed)" if errors else ""
+        parts = [f"{len(found)} found"]
+        if predicted_count:
+            parts.append(f"{predicted_count} predicted")
+        if errors:
+            parts.append(f"{len(errors)} failed")
         self.status_label.configure(
-            text=f"Copied {len(names)} / {total} to clipboard.{error_note}",
+            text=f"Copied {' · '.join(parts)} / {total}.",
             text_color="green",
         )
 
