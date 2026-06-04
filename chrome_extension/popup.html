@@ -40,12 +40,24 @@
       min-height: 16px;
     }
     #status.error { color: #f38ba8; }
+    #warnings { margin-top: 10px; }
+    .warning {
+      font-size: 11px;
+      color: #fab387;
+      background: rgba(250, 179, 135, 0.08);
+      border: 1px solid rgba(250, 179, 135, 0.35);
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-bottom: 5px;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
   <h2>LinkedIn URL Collector</h2>
   <button id="copyBtn">Copy LinkedIn URLs</button>
   <div id="status"></div>
+  <div id="warnings"></div>
   <script src="popup.js"></script>
 </body>
 </html>
