@@ -373,8 +373,8 @@ class App(ctk.CTk):
             body_template = self._body_text
 
             if is_recruiter and self._recruiter_input_mode == "Position":
-                pos_names = [n.strip() for n in position_name.split(",") if n.strip()]
                 pos_links = [l.strip() for l in position_link.split(",") if l.strip()]
+                pos_names = [position_name.strip()] if len(pos_links) == 1 else [n.strip() for n in position_name.split(",") if n.strip()]
                 pos_count = len(pos_names)
                 linked_parts = [
                     f'<a href="{pos_links[i]}">{pname}</a>' if i < len(pos_links) and pos_links[i] else pname
