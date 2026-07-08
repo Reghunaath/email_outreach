@@ -42,14 +42,16 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
   status.className = '';
 
   const tabs = await chrome.tabs.query({});
-  const urls = tabs
-    .map(t => t.url || '')
-    .filter(url => /linkedin\.com\/in\//.test(url))
-    .map(url => {
+  const profileTabs = tabs
+    .map(t => {
+      const url = t.url || '';
+      if (!/linkedin\.com\/in\//.test(url)) return null;
       const match = url.match(/(https?:\/\/(?:www\.)?linkedin\.com\/in\/[^/?#]+)/);
-      return match ? match[1] : null;
+      return match ? { id: t.id, url: match[1] } : null;
     })
     .filter(Boolean);
+
+  const urls = profileTabs.map(t => t.url);
 
   if (urls.length === 0) {
     status.textContent = 'No LinkedIn profile tabs found.';
@@ -59,7 +61,13 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
   }
 
   await navigator.clipboard.writeText(urls.join('\n'));
-  status.textContent = `Copied ${urls.length} URL${urls.length !== 1 ? 's' : ''}.`;
+
+  const tabIds = profileTabs.map(t => t.id).filter(id => id !== undefined);
+  if (tabIds.length > 0) {
+    await chrome.tabs.remove(tabIds);
+  }
+
+  status.textContent = `Copied ${urls.length} URL${urls.length !== 1 ? 's' : ''} and closed ${tabIds.length} tab${tabIds.length !== 1 ? 's' : ''}.`;
   btn.disabled = false;
 });
 
