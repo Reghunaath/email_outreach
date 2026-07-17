@@ -4,6 +4,11 @@ These rules apply to all projects unless a project-specific CLAUDE.md overrides 
 
 ---
 
+> [!IMPORTANT]
+> **Never commit anything without my explicit permission.** Do not run `git commit` (or push) until I have explicitly approved that specific commit. This overrides the "Commit gate" below — code the step, report it, and wait for my go-ahead before committing.
+
+---
+
 ## 1. Communication
 
 - **Deviations**: If you need to deviate from stated requirements for any reason (technical limitation, ambiguity, better approach), **STOP and inform me in highlighted text before proceeding.** Do not silently deviate.
