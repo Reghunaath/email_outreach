@@ -2,6 +2,7 @@ import customtkinter as ctk
 import win32com.client
 import json
 import csv
+import re
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -19,6 +20,15 @@ LOG_FILE                = "log.csv"
 DEFAULT_SUBJECT_FOUNDER   = "How I Can Contribute to {company}"
 DEFAULT_SUBJECT_RECRUITER = "Reaching out so I'm more than just a PDF"
 DEFAULT_SUBJECT_LINKEDIN  = "Reaching out regarding your LinkedIn post"
+
+SIGNATURE_HTML = (
+    "<p>\n"
+    "  Best,<br />\n"
+    "  Reghunaath<br />\n"
+    "  (857) 351-9009 |\n"
+    '  <a href="https://linkedin.com/in/reghunaath">linkedin.com/in/reghunaath</a>\n'
+    "</p>"
+)
 
 LOG_HEADERS = ["name", "email", "company", "url_extension", "sent_at", "scheduled_for"]
 
@@ -51,6 +61,8 @@ def increment_url_extension() -> None:
 
 
 def read_template_raw(mode: str = "Founder") -> str:
+    if mode == "Custom":
+        return ""
     if mode == "Recruiter":
         file = TEMPLATE_RECRUITER_FILE
     elif mode == "Hiring Manager":
@@ -110,7 +122,7 @@ class App(ctk.CTk):
         ).pack(padx=24, pady=(0, 8), anchor="w")
 
         self.mode_toggle = ctk.CTkSegmentedButton(
-            c, values=["Founder", "Recruiter", "Hiring Manager"], command=self._toggle_mode, width=372
+            c, values=["Founder", "Recruiter", "Hiring Manager", "Custom"], command=self._toggle_mode, width=372
         )
         self.mode_toggle.set("Recruiter")
         self.mode_toggle.pack(padx=24, pady=(0, 10))
@@ -234,6 +246,20 @@ class App(ctk.CTk):
             self.position_link_entry.pack(padx=24, pady=(0, 10), before=self.subject_entry)
 
     def _toggle_mode(self, value: str):
+        if value == "Custom":
+            self.paste_btn.pack_forget()
+            self.recruiter_sub_toggle.pack_forget()
+            self.job_ids_entry.pack_forget()
+            self.position_name_entry.pack_forget()
+            self.position_link_entry.pack_forget()
+            self.company_entry.pack_forget()
+            self._recruiter_input_mode = "Job IDs"
+            self.subject_entry.configure(values=[DEFAULT_SUBJECT_RECRUITER, DEFAULT_SUBJECT_LINKEDIN])
+            self.subject_entry.set("")
+            self._body_text = read_template_raw(value)
+            return
+
+        self.company_entry.pack(after=self.email_entry, padx=24, pady=(0, 10))
         if value in ("Recruiter", "Hiring Manager"):
             self.recruiter_sub_toggle.pack(padx=24, pady=(0, 10), before=self.subject_entry)
             self.paste_btn.pack(padx=24, pady=(0, 10), before=self.recruiter_sub_toggle)
@@ -322,14 +348,19 @@ class App(ctk.CTk):
     def _send(self):
         names   = [n.strip() for n in self.name_entry.get().split(",") if n.strip()]
         emails  = [e.strip() for e in self.email_entry.get().split(",") if e.strip()]
-        company = self.company_entry.get().strip()
         mode          = self.mode_toggle.get()
+        is_custom     = mode == "Custom"
         is_recruiter  = mode in ("Recruiter", "Hiring Manager")
+        company = "" if is_custom else self.company_entry.get().strip()
         job_ids       = self.job_ids_entry.get().strip() if (is_recruiter and self._recruiter_input_mode == "Job IDs") else ""
         position_name = self.position_name_entry.get().strip() if (is_recruiter and self._recruiter_input_mode == "Position") else ""
         position_link = self.position_link_entry.get().strip() if (is_recruiter and self._recruiter_input_mode == "Position") else ""
 
-        if not names or not emails or not company:
+        if is_custom:
+            if not names or not emails:
+                self._set_status("Fill in name and email.", ok=False)
+                return
+        elif not names or not emails or not company:
             self._set_status("Fill in all fields.", ok=False)
             return
 
@@ -371,6 +402,27 @@ class App(ctk.CTk):
             resume_path = str(Path(resume_file).resolve())
 
             body_template = self._body_text
+
+            if is_custom:
+                def _portfolio_link(m):
+                    url = m.group(0)
+                    trailing = ""
+                    while url and url[-1] in ".,;:!?)":
+                        trailing = url[-1] + trailing
+                        url = url[:-1]
+                    href = url if url.startswith("http") else "https://" + url
+                    return f'<a href="{href}">portfolio</a>' + trailing
+
+                linked = re.sub(
+                    r"(?:https?://)?(?:www\.)?reghunaath\.com/[^\s<]+",
+                    _portfolio_link,
+                    self._body_text,
+                )
+                segments = [seg.strip() for seg in linked.split("\n\n") if seg.strip()]
+                body_html = "\n".join(
+                    "<p>" + seg.replace("\n", "<br />\n") + "</p>" for seg in segments
+                )
+                body_template = f"<p>Hi {{name}},</p>\n{body_html}\n{SIGNATURE_HTML}"
 
             if is_recruiter and self._recruiter_input_mode == "Position":
                 pos_links = [l.strip() for l in position_link.split(",") if l.strip()]
@@ -422,7 +474,8 @@ class App(ctk.CTk):
                 else:
                     mail.Send()
                     log_email(name, email, company, url_extension)
-                increment_url_extension()
+                if not is_custom:
+                    increment_url_extension()
 
             self.name_entry.delete(0, "end")
             self.email_entry.delete(0, "end")
@@ -433,7 +486,10 @@ class App(ctk.CTk):
                 else:
                     self.position_name_entry.delete(0, "end")
                     self.position_link_entry.delete(0, "end")
-            self.subject_entry.set(DEFAULT_SUBJECT_FOUNDER if mode == "Founder" else DEFAULT_SUBJECT_RECRUITER)
+            if is_custom:
+                self.subject_entry.set("")
+            else:
+                self.subject_entry.set(DEFAULT_SUBJECT_FOUNDER if mode == "Founder" else DEFAULT_SUBJECT_RECRUITER)
             self._body_text = read_template_raw(mode)
 
             count = len(names)
