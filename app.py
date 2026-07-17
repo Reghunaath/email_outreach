@@ -17,6 +17,9 @@ RESUME_FILE_JAVA        = "Reghunaath_Resume_May_J.pdf"
 DATA_FILE               = "data.json"
 LOG_FILE                = "log.csv"
 
+OUTLOOK_ACCOUNT = "ajithkumarahila.r@northeastern.edu"
+GMAIL_ACCOUNT   = "reghunaath4@gmail.com"
+
 DEFAULT_SUBJECT_FOUNDER   = "How I Can Contribute to {company}"
 DEFAULT_SUBJECT_RECRUITER = "Reaching out so I'm more than just a PDF"
 DEFAULT_SUBJECT_LINKEDIN  = "Reaching out regarding your LinkedIn post"
@@ -102,7 +105,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Email Outreach")
-        self.geometry("420x700")
+        self.geometry("420x760")
         self.resizable(False, False)
         self._body_text = read_template_raw("Recruiter")
         self._recruiter_input_mode = "Job IDs"
@@ -126,6 +129,17 @@ class App(ctk.CTk):
         )
         self.mode_toggle.set("Recruiter")
         self.mode_toggle.pack(padx=24, pady=(0, 10))
+
+        # ── Send From ──
+        ctk.CTkLabel(
+            c, text="SEND FROM", font=ctk.CTkFont(size=11), text_color="gray"
+        ).pack(padx=24, pady=(8, 8), anchor="w")
+
+        self.account_toggle = ctk.CTkSegmentedButton(
+            c, values=["Outlook", "Gmail"], width=372
+        )
+        self.account_toggle.set("Gmail")
+        self.account_toggle.pack(padx=24, pady=(0, 10))
 
         # ── Recipient ──
         ctk.CTkLabel(
@@ -398,6 +412,17 @@ class App(ctk.CTk):
 
         try:
             outlook = win32com.client.Dispatch("Outlook.Application")
+
+            target_smtp = GMAIL_ACCOUNT if self.account_toggle.get() == "Gmail" else OUTLOOK_ACCOUNT
+            send_account = None
+            for acc in outlook.Session.Accounts:
+                if acc.SmtpAddress.lower() == target_smtp.lower():
+                    send_account = acc
+                    break
+            if send_account is None:
+                self._set_status(f"No Outlook account found for {target_smtp}.", ok=False)
+                return
+
             resume_file = RESUME_FILE_JAVA if self.stack_toggle.get() == "Java" else RESUME_FILE_CSHARP
             resume_path = str(Path(resume_file).resolve())
 
@@ -462,6 +487,7 @@ class App(ctk.CTk):
                 if self.stack_toggle.get() == "Java":
                     body = body.replace("(.NET, FastAPI, React and Node.js)", "(Spring Boot, FastAPI, React and Node.js)")
                 mail = outlook.CreateItem(0)
+                mail.SendUsingAccount = send_account
                 mail.To       = email
                 mail.Subject  = subject
                 mail.HTMLBody = body
