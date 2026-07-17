@@ -419,8 +419,19 @@ class App(ctk.CTk):
                 if acc.SmtpAddress.lower() == target_smtp.lower():
                     send_account = acc
                     break
+            # Gmail/IMAP accounts added to modern Outlook aren't exposed in the
+            # Accounts collection, so SendUsingAccount can't target them. Fall back
+            # to the account's mailbox store: creating the message in its Drafts
+            # folder makes Outlook send from that account.
+            send_drafts = None
             if send_account is None:
-                self._set_status(f"No Outlook account found for {target_smtp}.", ok=False)
+                for i in range(1, outlook.Session.Stores.Count + 1):
+                    store = outlook.Session.Stores.Item(i)
+                    if target_smtp.lower() in store.DisplayName.lower():
+                        send_drafts = store.GetDefaultFolder(16)  # olFolderDrafts
+                        break
+            if send_account is None and send_drafts is None:
+                self._set_status(f"No Outlook account or mailbox found for {target_smtp}.", ok=False)
                 return
 
             resume_file = RESUME_FILE_JAVA if self.stack_toggle.get() == "Java" else RESUME_FILE_CSHARP
@@ -486,8 +497,11 @@ class App(ctk.CTk):
                         body = body.replace("all of these roles", f"these {job_count} roles")
                 if self.stack_toggle.get() == "Java":
                     body = body.replace("(.NET, FastAPI, React and Node.js)", "(Spring Boot, FastAPI, React and Node.js)")
-                mail = outlook.CreateItem(0)
-                mail.SendUsingAccount = send_account
+                if send_account is not None:
+                    mail = outlook.CreateItem(0)
+                    mail.SendUsingAccount = send_account
+                else:
+                    mail = send_drafts.Items.Add("IPM.Note")
                 mail.To       = email
                 mail.Subject  = subject
                 mail.HTMLBody = body
