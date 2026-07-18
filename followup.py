@@ -14,6 +14,9 @@ MAX_SENT_EMAILS             = 500
 LOG_FILE                    = "log_followup.csv"
 LOG_HEADERS                 = ["name", "email", "company", "sent_at", "scheduled_for"]
 
+OUTLOOK_ACCOUNT = "ajithkumarahila.r@northeastern.edu"
+GMAIL_ACCOUNT   = "reghunaath4@gmail.com"
+
 
 def log_email(name: str, email: str, company: str, scheduled_for: str = "") -> None:
     log_path = Path(LOG_FILE)
@@ -58,7 +61,7 @@ class FollowUpApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Follow-up")
-        self.geometry("590x690")
+        self.geometry("590x745")
         self.resizable(False, False)
         self._outlook    = None
         self._mail_items = []  # list of (BooleanVar, outlook_mail_item)
@@ -79,6 +82,17 @@ class FollowUpApp(ctk.CTk):
         )
         self.mode_toggle.set("Recruiter")
         self.mode_toggle.pack(padx=24, pady=(0, 10))
+
+        # ── Send From ──
+        ctk.CTkLabel(
+            self, text="SEND FROM", font=ctk.CTkFont(size=11), text_color="gray"
+        ).pack(padx=24, pady=(8, 8), anchor="w")
+
+        self.account_toggle = ctk.CTkSegmentedButton(
+            self, values=["Outlook", "Gmail"], command=self._on_account_change, width=542
+        )
+        self.account_toggle.set("Gmail")
+        self.account_toggle.pack(padx=24, pady=(0, 10))
 
         # ── Sent emails header ──
         ctk.CTkLabel(
@@ -145,13 +159,28 @@ class FollowUpApp(ctk.CTk):
 
         self._toggle_schedule("Schedule")
 
+    def _on_account_change(self, _value):
+        if self._mail_items:
+            self._load_sent_emails()
+
+    def _account_folder(self, namespace, folder_id):
+        if self.account_toggle.get() == "Gmail":
+            for i in range(1, namespace.Stores.Count + 1):
+                store = namespace.Stores.Item(i)
+                if GMAIL_ACCOUNT.lower() in store.DisplayName.lower():
+                    return store.GetDefaultFolder(folder_id)
+            return None
+        return namespace.GetDefaultFolder(folder_id)
+
     def _get_replied_conv_ids(self, items: list, filter_from) -> set:
         replied = set()
         if not items or filter_from is None:
             return replied
         try:
             namespace = self._outlook.GetNamespace("MAPI")
-            inbox     = namespace.GetDefaultFolder(6)  # olFolderInbox
+            inbox     = self._account_folder(namespace, 6)  # olFolderInbox
+            if inbox is None:
+                return replied
 
             target_conv_ids = {item.ConversationID for item in items}
 
@@ -193,7 +222,10 @@ class FollowUpApp(ctk.CTk):
             if self._outlook is None:
                 self._outlook = win32com.client.Dispatch("Outlook.Application")
             namespace   = self._outlook.GetNamespace("MAPI")
-            sent_folder = namespace.GetDefaultFolder(5)  # olFolderSentMail
+            sent_folder = self._account_folder(namespace, 5)  # olFolderSentMail
+            if sent_folder is None:
+                self._set_status(f"Gmail mailbox ({GMAIL_ACCOUNT}) not found in Outlook.", ok=False)
+                return
             items       = sent_folder.Items
             items.Sort("[SentOn]", True)
 
@@ -291,7 +323,7 @@ class FollowUpApp(ctk.CTk):
         self._update_geometry()
 
     def _update_geometry(self):
-        h = 690
+        h = 745
         if self.send_mode.get() == "Schedule":
             h += 60
         self.geometry(f"590x{h}")
