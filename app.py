@@ -33,10 +33,10 @@ SIGNATURE_HTML = (
     "</p>"
 )
 
-LOG_HEADERS = ["name", "email", "company", "url_extension", "sent_at", "scheduled_for"]
+LOG_HEADERS = ["name", "email", "company", "url_extension", "sent_at", "scheduled_for", "sent_from"]
 
 
-def log_email(name: str, email: str, company: str, url_extension: int, scheduled_for: str = "") -> None:
+def log_email(name: str, email: str, company: str, url_extension: int, scheduled_for: str = "", sent_from: str = "") -> None:
     log_path = Path(LOG_FILE)
     write_header = not log_path.exists()
     with log_path.open("a", newline="", encoding="utf-8") as f:
@@ -50,6 +50,7 @@ def log_email(name: str, email: str, company: str, url_extension: int, scheduled
             "url_extension": url_extension,
             "sent_at":       datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "scheduled_for": scheduled_for,
+            "sent_from":     sent_from,
         })
 
 
@@ -510,10 +511,10 @@ class App(ctk.CTk):
                 if schedule_mode:
                     mail.DeferredDeliveryTime = dt.strftime("%m/%d/%Y %I:%M %p")
                     mail.Send()
-                    log_email(name, email, company, url_extension, scheduled_for=dt.strftime("%Y-%m-%d %H:%M:%S"))
+                    log_email(name, email, company, url_extension, scheduled_for=dt.strftime("%Y-%m-%d %H:%M:%S"), sent_from=target_smtp)
                 else:
                     mail.Send()
-                    log_email(name, email, company, url_extension)
+                    log_email(name, email, company, url_extension, sent_from=target_smtp)
                 if not is_custom:
                     increment_url_extension()
 
