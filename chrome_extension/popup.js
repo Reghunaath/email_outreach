@@ -71,4 +71,63 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
   btn.disabled = false;
 });
 
+// --- Manual AI answer generator (for sites AI fill can't reach) -------------
+
+document.getElementById('generateBtn').addEventListener('click', async () => {
+  const genBtn = document.getElementById('generateBtn');
+  const aiStatus = document.getElementById('aiStatus');
+  const resultField = document.getElementById('aiResultField');
+  const resultBox = document.getElementById('aiResult');
+
+  const question = document.getElementById('aiQuestion').value.trim();
+  const jd = document.getElementById('aiJd').value.trim();
+  const context = document.getElementById('aiContext').value.trim();
+
+  const setStatus = (text, isError) => {
+    aiStatus.textContent = text;
+    aiStatus.className = isError ? 'error' : '';
+  };
+
+  if (!question) {
+    setStatus('Enter a question first.', true);
+    return;
+  }
+  if (!chrome.runtime || !chrome.runtime.id) {
+    setStatus('Extension was reloaded. Reopen this popup.', true);
+    return;
+  }
+
+  genBtn.disabled = true;
+  genBtn.textContent = 'Generating…';
+  setStatus('', false);
+
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: 'ASHBY_FILL',
+      question,
+      board: '',
+      postingId: '',
+      pageText: jd,
+      remark: context,
+    });
+    if (res && res.text) {
+      resultBox.value = res.text;
+      resultField.style.display = 'block';
+      try {
+        await navigator.clipboard.writeText(res.text);
+        setStatus('Answer copied to clipboard.', false);
+      } catch (_) {
+        setStatus('Answer generated (copy failed, select it manually).', true);
+      }
+    } else {
+      setStatus((res && res.error) || 'No response from the extension.', true);
+    }
+  } catch (err) {
+    setStatus(err.message || 'Unexpected error.', true);
+  } finally {
+    genBtn.disabled = false;
+    genBtn.textContent = 'Generate answer';
+  }
+});
+
 scanForKeywords();

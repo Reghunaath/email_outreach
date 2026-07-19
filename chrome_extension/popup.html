@@ -5,7 +5,7 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      width: 240px;
+      width: 320px;
       padding: 16px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #1e1e2e;
@@ -17,6 +17,12 @@
       margin-bottom: 12px;
       color: #cdd6f4;
       letter-spacing: 0.3px;
+    }
+    p.sub {
+      font-size: 11px;
+      color: #a6adc8;
+      margin-bottom: 14px;
+      line-height: 1.5;
     }
     button {
       width: 100%;
@@ -31,6 +37,7 @@
       transition: background 0.15s;
     }
     button:hover { background: #74c7ec; }
+    button:focus-visible { outline: 2px solid #cdd6f4; outline-offset: 2px; }
     button:disabled { background: #45475a; color: #6c7086; cursor: default; }
     #status {
       margin-top: 10px;
@@ -51,6 +58,49 @@
       margin-bottom: 5px;
       word-break: break-word;
     }
+    .divider {
+      border-top: 1px solid #313244;
+      margin: 18px 0 16px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #cdd6f4;
+    }
+    label .hint { font-weight: 400; color: #6c7086; }
+    .field { margin-bottom: 12px; }
+    textarea {
+      width: 100%;
+      padding: 8px 9px;
+      font-size: 12px;
+      font-family: inherit;
+      line-height: 1.5;
+      color: #cdd6f4;
+      background: #181825;
+      border: 1px solid #313244;
+      border-radius: 6px;
+      resize: vertical;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    textarea::placeholder { color: #585b70; }
+    textarea:hover { border-color: #45475a; }
+    textarea:focus {
+      outline: none;
+      border-color: #89b4fa;
+      box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.25);
+    }
+    textarea[readonly] { color: #a6adc8; background: #11111b; }
+    #aiStatus {
+      margin: 10px 0;
+      font-size: 12px;
+      color: #a6e3a1;
+      text-align: center;
+      min-height: 16px;
+    }
+    #aiStatus.error { color: #f38ba8; }
+    #aiResultField { display: none; }
   </style>
 </head>
 <body>
@@ -58,6 +108,37 @@
   <button id="copyBtn">Copy LinkedIn URLs</button>
   <div id="status"></div>
   <div id="warnings"></div>
+
+  <div class="divider"></div>
+
+  <h2>AI answer generator</h2>
+  <p class="sub">For application forms the AI fill buttons can't reach (custom career pages).
+    Paste the question, job description, and any context, then generate an answer to copy in.</p>
+
+  <div class="field">
+    <label for="aiQuestion">Question</label>
+    <textarea id="aiQuestion" rows="2" spellcheck="false"
+              placeholder="The application question…"></textarea>
+  </div>
+  <div class="field">
+    <label for="aiJd">Job description <span class="hint">— optional</span></label>
+    <textarea id="aiJd" rows="4" spellcheck="false"
+              placeholder="Paste the job description…"></textarea>
+  </div>
+  <div class="field">
+    <label for="aiContext">Context <span class="hint">— optional</span></label>
+    <textarea id="aiContext" rows="2" spellcheck="false"
+              placeholder="Any extra context or instruction for this answer…"></textarea>
+  </div>
+
+  <button id="generateBtn">Generate answer</button>
+  <div id="aiStatus"></div>
+
+  <div class="field" id="aiResultField">
+    <label for="aiResult">Generated answer <span class="hint">— copied to clipboard</span></label>
+    <textarea id="aiResult" rows="7" spellcheck="false" readonly></textarea>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

@@ -1,3 +1,9 @@
+// Clicking the toolbar icon opens (and toggles) the side panel instead of a
+// dropdown popup, so it stays open until dismissed.
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch(() => {});
+
 const DEFAULT_MODEL = 'gemini-flash-latest';
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const ASHBY_POSTING_API = 'https://api.ashbyhq.com/posting-api/job-board';
@@ -65,7 +71,6 @@ PROJECTS
 - LeadCatch AI — AI chat assistant powered by ChatGPT and Twilio APIs to turn missed calls into booked appointments for small businesses. Designed a scalable Python backend for multi-user handling and automated SMS-based lead conversion. Earned 2nd place and $1500 in the "Best Startup Demonstrating Traction" category at the Yconic AI Hackathon (Microsoft, Cambridge, MA).
 - Doodlpop (1st Place, SharkHack Hackathon) — AI-powered comic book generator that turns a single sentence into a fully illustrated comic. From a story idea it generates a panel-by-panel script with dialogue and visual descriptions, lets the user pick an art style (manga, western, watercolor storybook), edit the script, then illustrates every panel with AI. Supports shareable links, QR code sharing, and PDF export.
 - SNAPBACK (2nd Place, Babson Generator Build-a-thon) — computer vision tool that measures athletic mobility loss after injury or a long break with no wearables and no clinic visit. Uses MediaPipe and OpenCV to track 33 skeletal landmarks at 30fps and compute joint angles in real time, producing a mobility score out of 100 benchmarked against clinical reference ranges, a sport-specific gap analysis, and a personalised week-by-week return-to-sport exercise plan with sets, reps, and reasoning.
-- DEADPOOL (Dependency Evaluation And Downstream Prediction Of Operational Liabilities) — multi-agent AI system that identifies operational risks and failure cascades in startups before they become catastrophic. Orchestrated 6 specialist agents (People, Finance, Infrastructure, Product, Legal, Code Audit) running concurrently via LangGraph, with cross-domain cascade expansion using Gemini 2.5 Pro to trace how a single failure propagates across the organisation, producing a 0 to 100 composite risk score and a plain-language founder briefing.
 
 TECHNICAL SKILLS
 - Backend: C# (.NET), Java (Spring Boot), Python (Django, Flask, FastAPI)
@@ -113,6 +118,13 @@ function buildPrompt(question, jobDescription, profile, remark) {
     "  experience that one of the applicant's projects or hackathon wins demonstrates,",
     '  reference that specific project by name and briefly what was built or achieved.',
     '  Prefer a concrete example over a generic claim.',
+    '- Whenever you mention a specific hackathon project, also state the placement it',
+    "  won and the prize money, using the details in the profile (for example RescueLine",
+    "  AI won 1st place and $700, LeadCatch AI won 2nd place and $1500). If the profile",
+    '  lists no prize money for that project, just state the placement.',
+    '- Whenever you mention hackathon wins in general (without naming a specific',
+    "  hackathon), state that the applicant has won 4 hackathons with over $2000 in",
+    '  combined prize money.',
     '',
     'APPLICANT PROFILE:',
     profileSection,
