@@ -7,3 +7,4 @@ email_finder/apollo_creds.json
 .claude/
 __pycache__/
 *.pyc
+.playwright-mcp/
