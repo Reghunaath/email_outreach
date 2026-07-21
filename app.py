@@ -19,6 +19,14 @@ LOG_FILE                = "log.csv"
 
 OUTLOOK_ACCOUNT = "ajithkumarahila.r@northeastern.edu"
 GMAIL_ACCOUNT   = "reghunaath4@gmail.com"
+GMAIL_ACCOUNT_2 = "aa.reghunaath@gmail.com"
+
+# Toggle label → account SMTP address. Order here sets the segmented-button order.
+ACCOUNTS = {
+    "Outlook":       OUTLOOK_ACCOUNT,
+    "reghunaath4":   GMAIL_ACCOUNT,
+    "aa.reghunaath": GMAIL_ACCOUNT_2,
+}
 
 DEFAULT_SUBJECT_FOUNDER   = "How I Can Contribute to {company}"
 DEFAULT_SUBJECT_RECRUITER = "Reaching out so I'm more than just a PDF"
@@ -137,9 +145,9 @@ class App(ctk.CTk):
         ).pack(padx=24, pady=(8, 8), anchor="w")
 
         self.account_toggle = ctk.CTkSegmentedButton(
-            c, values=["Outlook", "Gmail"], width=372
+            c, values=list(ACCOUNTS), width=372
         )
-        self.account_toggle.set("Gmail")
+        self.account_toggle.set("reghunaath4")
         self.account_toggle.pack(padx=24, pady=(0, 10))
 
         # ── Recipient ──
@@ -414,22 +422,24 @@ class App(ctk.CTk):
         try:
             outlook = win32com.client.Dispatch("Outlook.Application")
 
-            target_smtp = GMAIL_ACCOUNT if self.account_toggle.get() == "Gmail" else OUTLOOK_ACCOUNT
-            send_account = None
-            for acc in outlook.Session.Accounts:
-                if acc.SmtpAddress.lower() == target_smtp.lower():
-                    send_account = acc
-                    break
-            # Gmail/IMAP accounts added to modern Outlook aren't exposed in the
-            # Accounts collection, so SendUsingAccount can't target them. Fall back
-            # to the account's mailbox store: creating the message in its Drafts
-            # folder makes Outlook send from that account.
+            target_smtp = ACCOUNTS[self.account_toggle.get()]
+            # Prefer the account's own mailbox store: creating the message in its
+            # Drafts folder makes Outlook send from that account. Required for
+            # Gmail/IMAP accounts — an IMAP account exposed in the Accounts
+            # collection sends from the wrong (default) account when targeted via
+            # SendUsingAccount, because the draft is born in the default store.
             send_drafts = None
-            if send_account is None:
-                for i in range(1, outlook.Session.Stores.Count + 1):
-                    store = outlook.Session.Stores.Item(i)
-                    if target_smtp.lower() in store.DisplayName.lower():
-                        send_drafts = store.GetDefaultFolder(16)  # olFolderDrafts
+            for i in range(1, outlook.Session.Stores.Count + 1):
+                store = outlook.Session.Stores.Item(i)
+                if target_smtp.lower() in store.DisplayName.lower():
+                    send_drafts = store.GetDefaultFolder(16)  # olFolderDrafts
+                    break
+            # Fall back to SendUsingAccount only if no mailbox store matched.
+            send_account = None
+            if send_drafts is None:
+                for acc in outlook.Session.Accounts:
+                    if acc.SmtpAddress.lower() == target_smtp.lower():
+                        send_account = acc
                         break
             if send_account is None and send_drafts is None:
                 self._set_status(f"No Outlook account or mailbox found for {target_smtp}.", ok=False)

@@ -16,6 +16,14 @@ LOG_HEADERS                 = ["name", "email", "company", "sent_at", "scheduled
 
 OUTLOOK_ACCOUNT = "ajithkumarahila.r@northeastern.edu"
 GMAIL_ACCOUNT   = "reghunaath4@gmail.com"
+GMAIL_ACCOUNT_2 = "aa.reghunaath@gmail.com"
+
+# Toggle label → account SMTP address. Order here sets the segmented-button order.
+ACCOUNTS = {
+    "Outlook":       OUTLOOK_ACCOUNT,
+    "reghunaath4":   GMAIL_ACCOUNT,
+    "aa.reghunaath": GMAIL_ACCOUNT_2,
+}
 
 
 def log_email(name: str, email: str, company: str, scheduled_for: str = "") -> None:
@@ -89,9 +97,9 @@ class FollowUpApp(ctk.CTk):
         ).pack(padx=24, pady=(8, 8), anchor="w")
 
         self.account_toggle = ctk.CTkSegmentedButton(
-            self, values=["Outlook", "Gmail"], command=self._on_account_change, width=542
+            self, values=list(ACCOUNTS), command=self._on_account_change, width=542
         )
-        self.account_toggle.set("Gmail")
+        self.account_toggle.set("reghunaath4")
         self.account_toggle.pack(padx=24, pady=(0, 10))
 
         # ── Sent emails header ──
@@ -164,13 +172,14 @@ class FollowUpApp(ctk.CTk):
             self._load_sent_emails()
 
     def _account_folder(self, namespace, folder_id):
-        if self.account_toggle.get() == "Gmail":
-            for i in range(1, namespace.Stores.Count + 1):
-                store = namespace.Stores.Item(i)
-                if GMAIL_ACCOUNT.lower() in store.DisplayName.lower():
-                    return store.GetDefaultFolder(folder_id)
-            return None
-        return namespace.GetDefaultFolder(folder_id)
+        if self.account_toggle.get() == "Outlook":
+            return namespace.GetDefaultFolder(folder_id)
+        target = ACCOUNTS[self.account_toggle.get()]
+        for i in range(1, namespace.Stores.Count + 1):
+            store = namespace.Stores.Item(i)
+            if target.lower() in store.DisplayName.lower():
+                return store.GetDefaultFolder(folder_id)
+        return None
 
     def _get_replied_conv_ids(self, items: list, filter_from) -> set:
         replied = set()
@@ -224,7 +233,7 @@ class FollowUpApp(ctk.CTk):
             namespace   = self._outlook.GetNamespace("MAPI")
             sent_folder = self._account_folder(namespace, 5)  # olFolderSentMail
             if sent_folder is None:
-                self._set_status(f"Gmail mailbox ({GMAIL_ACCOUNT}) not found in Outlook.", ok=False)
+                self._set_status(f"Gmail mailbox ({ACCOUNTS[self.account_toggle.get()]}) not found in Outlook.", ok=False)
                 return
             items       = sent_folder.Items
             items.Sort("[SentOn]", True)
