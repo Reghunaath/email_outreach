@@ -451,18 +451,21 @@ class App(ctk.CTk):
             body_template = self._body_text
 
             if is_custom:
-                def _portfolio_link(m):
+                def _linkify(m):
                     url = m.group(0)
                     trailing = ""
                     while url and url[-1] in ".,;:!?)":
                         trailing = url[-1] + trailing
                         url = url[:-1]
                     href = url if url.startswith("http") else "https://" + url
-                    return f'<a href="{href}">portfolio</a>' + trailing
+                    # The personal portfolio link reads as "portfolio"; every
+                    # other URL shows its own address as the clickable text.
+                    text = "portfolio" if "reghunaath.com" in url.lower() else url
+                    return f'<a href="{href}">{text}</a>' + trailing
 
                 linked = re.sub(
-                    r"(?:https?://)?(?:www\.)?reghunaath\.com/[^\s<]+",
-                    _portfolio_link,
+                    r"(?:https?://|www\.)[^\s<]+|reghunaath\.com/[^\s<]+",
+                    _linkify,
                     self._body_text,
                 )
                 segments = [seg.strip() for seg in linked.split("\n\n") if seg.strip()]
