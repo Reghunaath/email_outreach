@@ -7,6 +7,9 @@ These rules apply to all projects unless a project-specific CLAUDE.md overrides 
 > [!IMPORTANT]
 > **Never commit anything without my explicit permission.** Do not run `git commit` (or push) until I have explicitly approved that specific commit. This overrides the "Commit gate" below — code the step, report it, and wait for my go-ahead before committing.
 
+> [!IMPORTANT]
+> **Never create or switch branches without my explicit permission.** Do not run `git checkout -b`, `git switch -c`, `git branch`, or otherwise change the current branch on your own. When I approve a commit, commit to the current branch unless I tell you to branch. Ask first if you think a branch is warranted.
+
 ---
 
 ## 1. Communication
